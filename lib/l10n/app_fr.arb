@@ -1,0 +1,8 @@
+{
+  "@@locale": "fr",
+  "appTitle": "TravelCI",
+  "@appTitle": {
+    "description": "Le titre de l'application"
+  }
+}
+
