@@ -39,9 +39,9 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      enableDrag: true,
+      isDismissible: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => _BookingSheet(
         property: ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId)!,
         startDate: _selectedStartDate,
@@ -341,11 +341,25 @@ class _BookingSheet extends StatefulWidget {
 
 class _BookingSheetState extends State<_BookingSheet> {
   late DateTime _focusedDay;
+  late TextEditingController _localMessageController;
 
   @override
   void initState() {
     super.initState();
     _focusedDay = widget.startDate ?? DateTime.now();
+    _localMessageController = TextEditingController(text: widget.messageController.text);
+    _localMessageController.addListener(_onMessageChanged);
+  }
+
+  void _onMessageChanged() {
+    widget.messageController.text = _localMessageController.text;
+  }
+
+  @override
+  void dispose() {
+    _localMessageController.removeListener(_onMessageChanged);
+    _localMessageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -355,17 +369,28 @@ class _BookingSheetState extends State<_BookingSheet> {
         : 0;
     final totalPrice = nights * widget.property.pricePerNight;
 
-    return Container(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
           const Text(
             'Demander une réservation',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -388,9 +413,11 @@ class _BookingSheetState extends State<_BookingSheet> {
               rangeStartDay: widget.startDate,
               rangeEndDay: widget.endDate,
               onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  _focusedDay = focusedDay;
-                });
+                if (mounted) {
+                  setState(() {
+                    _focusedDay = focusedDay;
+                  });
+                }
                 if (widget.startDate == null || (widget.startDate != null && widget.endDate != null)) {
                   widget.onStartDateSelected(selectedDay);
                 } else if (selectedDay.isAfter(widget.startDate!)) {
@@ -400,9 +427,11 @@ class _BookingSheetState extends State<_BookingSheet> {
                 }
               },
               onPageChanged: (focusedDay) {
-                setState(() {
-                  _focusedDay = focusedDay;
-                });
+                if (mounted) {
+                  setState(() {
+                    _focusedDay = focusedDay;
+                  });
+                }
               },
               calendarFormat: CalendarFormat.month,
               startingDayOfWeek: StartingDayOfWeek.monday,
@@ -426,13 +455,15 @@ class _BookingSheetState extends State<_BookingSheet> {
           ),
           const SizedBox(height: 16),
           TextField(
-            controller: widget.messageController,
+            controller: _localMessageController,
             decoration: const InputDecoration(
               labelText: 'Message (optionnel)',
               border: OutlineInputBorder(),
               hintText: 'Ajoutez un message pour le propriétaire...',
             ),
             maxLines: 3,
+            textInputAction: TextInputAction.done,
+            keyboardType: TextInputType.multiline,
           ),
           const SizedBox(height: 24),
           if (nights > 0) ...[
@@ -474,8 +505,11 @@ class _BookingSheetState extends State<_BookingSheet> {
             ),
             child: const Text('Envoyer la demande'),
           ),
-        ],
-      ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
