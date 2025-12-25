@@ -46,8 +46,8 @@ class _OwnerChatScreenState extends ConsumerState<OwnerChatScreen> {
   }
 
   List<Map<String, dynamic>> _getChatList() {
-    final bookings = ref.watch(bookingProvider);
-    final properties = ref.watch(propertyProvider);
+    final bookings = ref.watch(bookingProvider).bookings;
+    final properties = ref.watch(propertyProvider).properties;
     final owner = ref.watch(authProvider).user;
     
     if (owner == null) return [];
@@ -243,7 +243,7 @@ class _ChatDetailView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final booking = ref.watch(bookingProvider.notifier).getBookingById(bookingId);
-    final properties = ref.watch(propertyProvider);
+    final properties = ref.watch(propertyProvider).properties;
     final client = MockDataService.mockUsers.firstWhere(
       (u) => u.id == clientId,
       orElse: () => User(

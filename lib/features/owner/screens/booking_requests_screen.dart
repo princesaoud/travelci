@@ -53,8 +53,8 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bookings = ref.watch(bookingProvider);
-    final properties = ref.watch(propertyProvider);
+    final bookings = ref.watch(bookingProvider).bookings;
+    final properties = ref.watch(propertyProvider).properties;
     final ownerProperties = ref.watch(authProvider).user != null
         ? ref.read(propertyProvider.notifier).getPropertiesByOwner(
               ref.watch(authProvider).user!.id,

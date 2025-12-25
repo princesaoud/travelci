@@ -1,68 +1,179 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travelci/core/models/booking.dart';
 import 'package:travelci/core/models/user.dart';
-import 'package:travelci/core/services/mock_data_service.dart';
-import 'package:uuid/uuid.dart';
+import 'package:travelci/core/services/booking_service.dart';
 
-class BookingNotifier extends StateNotifier<List<Booking>> {
-  BookingNotifier() : super([]);
+class BookingState {
+  final List<Booking> bookings;
+  final bool isLoading;
+  final String? error;
 
-  void loadBookings(String userId, UserRole role) {
-    state = MockDataService.getMockBookings(userId, role);
-  }
+  const BookingState({
+    this.bookings = const [],
+    this.isLoading = false,
+    this.error,
+  });
 
-  void createBooking({
-    required String propertyId,
-    required String clientId,
-    required DateTime startDate,
-    required DateTime endDate,
-    required int guests,
-    String? message,
-    required int totalPrice,
+  BookingState copyWith({
+    List<Booking>? bookings,
+    bool? isLoading,
+    String? error,
   }) {
-    final booking = Booking(
-      id: const Uuid().v4(),
-      propertyId: propertyId,
-      clientId: clientId,
-      startDate: startDate,
-      endDate: endDate,
-      nights: endDate.difference(startDate).inDays,
-      guests: guests,
-      message: message,
-      totalPrice: totalPrice,
-      status: BookingStatus.pending,
-      createdAt: DateTime.now(),
+    return BookingState(
+      bookings: bookings ?? this.bookings,
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
     );
+  }
+}
 
-    state = [...state, booking];
+class BookingNotifier extends StateNotifier<BookingState> {
+  final BookingService _bookingService;
+
+  BookingNotifier(this._bookingService) : super(BookingState());
+
+  /// Load bookings for current user
+  /// 
+  /// [role] can be 'client' or 'owner' to filter bookings
+  Future<void> loadBookings({String? role}) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final bookings = await _bookingService.getBookings(role: role);
+      state = state.copyWith(
+        bookings: bookings,
+        isLoading: false,
+        error: null,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
   }
 
-  void updateBookingStatus(String bookingId, BookingStatus status) {
-    state = state.map((b) => b.id == bookingId ? Booking(
-      id: b.id,
-      propertyId: b.propertyId,
-      clientId: b.clientId,
-      startDate: b.startDate,
-      endDate: b.endDate,
-      nights: b.nights,
-      guests: b.guests,
-      message: b.message,
-      totalPrice: b.totalPrice,
-      status: status,
-      createdAt: b.createdAt,
-    ) : b).toList();
-  }
-
+  /// Get booking by ID
   Booking? getBookingById(String id) {
     try {
-      return state.firstWhere((b) => b.id == id);
+      return state.bookings.firstWhere((b) => b.id == id);
     } catch (e) {
       return null;
     }
   }
+
+  /// Create a new booking
+  Future<Booking> createBooking({
+    required String propertyId,
+    required DateTime startDate,
+    required DateTime endDate,
+    required int guests,
+    String? message,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final booking = await _bookingService.createBooking(
+        propertyId: propertyId,
+        startDate: startDate,
+        endDate: endDate,
+        guests: guests,
+        message: message,
+      );
+
+      // Add to state
+      final updatedBookings = [booking, ...state.bookings];
+      state = state.copyWith(
+        bookings: updatedBookings,
+        isLoading: false,
+        error: null,
+      );
+
+      return booking;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceFirst('Exception: ', ''),
+      );
+      rethrow;
+    }
+  }
+
+  /// Update booking status (owner/admin only)
+  Future<Booking> updateBookingStatus({
+    required String id,
+    required BookingStatus status,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final booking = await _bookingService.updateBookingStatus(
+        id: id,
+        status: status,
+      );
+
+      // Update in state
+      final updatedBookings = state.bookings
+          .map((b) => b.id == id ? booking : b)
+          .toList();
+
+      state = state.copyWith(
+        bookings: updatedBookings,
+        isLoading: false,
+        error: null,
+      );
+
+      return booking;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceFirst('Exception: ', ''),
+      );
+      rethrow;
+    }
+  }
+
+  /// Cancel booking
+  Future<Booking> cancelBooking(String id) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final booking = await _bookingService.cancelBooking(id);
+
+      // Update in state
+      final updatedBookings = state.bookings
+          .map((b) => b.id == id ? booking : b)
+          .toList();
+
+      state = state.copyWith(
+        bookings: updatedBookings,
+        isLoading: false,
+        error: null,
+      );
+
+      return booking;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceFirst('Exception: ', ''),
+      );
+      rethrow;
+    }
+  }
+
+  /// Refresh bookings
+  Future<void> refresh({String? role}) async {
+    await loadBookings(role: role);
+  }
 }
 
-final bookingProvider = StateNotifierProvider<BookingNotifier, List<Booking>>((ref) {
-  return BookingNotifier();
+// Provider for BookingService
+final bookingServiceProvider = Provider<BookingService>((ref) {
+  return BookingService();
 });
 
+// Provider for BookingNotifier
+final bookingProvider = StateNotifierProvider<BookingNotifier, BookingState>((ref) {
+  final bookingService = ref.watch(bookingServiceProvider);
+  return BookingNotifier(bookingService);
+});

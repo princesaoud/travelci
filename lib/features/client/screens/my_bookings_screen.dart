@@ -102,8 +102,8 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
       );
     }
 
-    final bookings = ref.watch(bookingProvider);
-    final properties = ref.watch(propertyProvider);
+    final bookings = ref.watch(bookingProvider).bookings;
+    final properties = ref.watch(propertyProvider).properties;
     final filteredBookings = _filterBookings(bookings, properties);
 
     return Scaffold(

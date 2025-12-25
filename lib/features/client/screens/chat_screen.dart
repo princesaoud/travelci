@@ -70,7 +70,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
-    final properties = ref.watch(propertyProvider);
+    final properties = ref.watch(propertyProvider).properties;
     
     // Get unique owners from properties
     final ownerProperties = <String, List<Property>>{};

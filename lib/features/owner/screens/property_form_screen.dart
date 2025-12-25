@@ -44,6 +44,8 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
     'Ascenseur',
   ];
 
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -52,18 +54,46 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
     }
   }
 
-  void _loadProperty() {
-    final property = ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId!);
-    if (property != null) {
-      _titleController.text = property.title;
-      _descriptionController.text = property.description;
-      _addressController.text = property.address;
-      _cityController.text = property.city;
-      _priceController.text = property.pricePerNight.toString();
-      _selectedType = property.type;
-      _furnished = property.furnished;
-      _amenities.addAll(property.amenities);
-      // Note: In a real app, you'd load images from URLs
+  Future<void> _loadProperty() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      var property = ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId!);
+      
+      // If property not in cache, fetch from API
+      if (property == null) {
+        property = await ref.read(propertyProvider.notifier).fetchPropertyById(widget.propertyId!);
+      }
+
+      if (property != null && mounted) {
+        _titleController.text = property.title;
+        _descriptionController.text = property.description ?? '';
+        _addressController.text = property.address;
+        _cityController.text = property.city;
+        _priceController.text = property.pricePerNight.toString();
+        _selectedType = property.type;
+        _furnished = property.furnished;
+        _amenities.clear();
+        _amenities.addAll(property.amenities);
+        // Note: Images are loaded from URLs in the API response
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors du chargement: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -98,46 +128,67 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
     super.dispose();
   }
 
-  void _saveProperty() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> _saveProperty() async {
+    if (!_formKey.currentState!.validate()) return;
       final user = ref.read(authProvider).user;
       if (user == null) return;
 
-      final property = Property(
-        id: widget.propertyId ?? const Uuid().v4(),
-        ownerId: user.id,
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        type: _selectedType,
-        furnished: _furnished,
-        pricePerNight: int.parse(_priceController.text),
-        address: _addressController.text.trim(),
-        city: _cityController.text.trim(),
-        imageUrls: _selectedImages.isEmpty
-            ? (widget.propertyId != null
-                ? ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId!)!.imageUrls
-                : [])
-            : _selectedImages.map((file) => file.path).toList(), // In real app, upload to server and get URLs
-        amenities: _amenities,
-        createdAt: widget.propertyId != null
-            ? ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId!)!.createdAt
-            : DateTime.now(),
-      );
+      try {
+        if (widget.propertyId != null) {
+          // Update existing property
+          await ref.read(propertyProvider.notifier).updateProperty(
+                id: widget.propertyId!,
+                title: _titleController.text.trim(),
+                description: _descriptionController.text.trim().isEmpty
+                    ? null
+                    : _descriptionController.text.trim(),
+                type: _selectedType,
+                furnished: _furnished,
+                pricePerNight: double.parse(_priceController.text),
+                address: _addressController.text.trim(),
+                city: _cityController.text.trim(),
+                amenities: _amenities,
+              );
 
-      if (widget.propertyId != null) {
-        ref.read(propertyProvider.notifier).updateProperty(property);
-      } else {
-        ref.read(propertyProvider.notifier).addProperty(property);
+          if (mounted) {
+            context.pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Logement mis à jour')),
+            );
+          }
+        } else {
+          // Create new property
+          await ref.read(propertyProvider.notifier).createProperty(
+                title: _titleController.text.trim(),
+                description: _descriptionController.text.trim().isEmpty
+                    ? null
+                    : _descriptionController.text.trim(),
+                type: _selectedType,
+                furnished: _furnished,
+                pricePerNight: double.parse(_priceController.text),
+                address: _addressController.text.trim(),
+                city: _cityController.text.trim(),
+                amenities: _amenities,
+                images: _selectedImages.isEmpty ? null : _selectedImages,
+              );
+
+          if (mounted) {
+            context.pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Logement ajouté')),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur: ${e.toString().replaceFirst('Exception: ', '')}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
-
-      context.pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.propertyId != null
-              ? 'Logement mis à jour'
-              : 'Logement ajouté'),
-        ),
-      );
     }
   }
 
