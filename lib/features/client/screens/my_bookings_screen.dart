@@ -27,7 +27,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(authProvider).user;
       if (user != null) {
-        ref.read(bookingProvider.notifier).loadBookings(user.id, user.role);
+        ref.read(bookingProvider.notifier).loadBookings(role: 'client');
       }
     });
     _searchController.addListener(() {

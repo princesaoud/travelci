@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:travelci/core/models/api_response.dart';
 import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/services/api_service.dart';
@@ -54,6 +55,10 @@ class AuthService extends ApiService {
     required String email,
     required String password,
   }) async {
+    final fullUrl = '${ApiConfig.baseUrl}${ApiConfig.loginEndpoint}';
+    developer.log('Login attempt - Endpoint: ${ApiConfig.loginEndpoint}');
+    developer.log('Login attempt - Full URL: $fullUrl');
+    
     final response = await post<Map<String, dynamic>>(
       ApiConfig.loginEndpoint,
       data: {
@@ -72,11 +77,18 @@ class AuthService extends ApiService {
       final userData = apiResponse.data!['user'] as Map<String, dynamic>;
       final token = apiResponse.data!['token'] as String;
 
+      // Debug: Log raw user data from API
+      developer.log('Raw user data from API: $userData');
+      developer.log('User role from API: ${userData['role']}');
+
       // Save token
       await TokenManager.saveToken(token);
 
+      final user = User.fromJson(userData);
+      developer.log('Parsed user role: ${user.role}');
+
       return AuthResponse(
-        user: User.fromJson(userData),
+        user: user,
         token: token,
       );
     }

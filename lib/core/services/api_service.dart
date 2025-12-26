@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 import 'package:travelci/core/utils/api_config.dart';
 import 'package:travelci/core/utils/error_handler.dart';
@@ -10,6 +11,7 @@ class ApiService {
   late final Dio _dio;
 
   ApiService() {
+    developer.log('[ApiService] Initializing with baseUrl: ${ApiConfig.baseUrl}');
     _dio = Dio(
       BaseOptions(
         baseUrl: ApiConfig.baseUrl,
@@ -77,6 +79,9 @@ class ApiService {
     Options? options,
   }) async {
     try {
+      final fullUrl = '${ApiConfig.baseUrl}$path';
+      developer.log('[API] GET Request to: $fullUrl');
+      
       final response = await _dio.get(
         path,
         queryParameters: queryParameters,
@@ -84,7 +89,13 @@ class ApiService {
       );
       return handleApiResponse(response, parser);
     } on DioException catch (e) {
+      developer.log('[API] GET DioException Type: ${e.type}');
+      developer.log('[API] GET Error Message: ${e.message}');
+      developer.log('[API] GET Request URL: ${e.requestOptions.uri}');
       throw Exception(ApiErrorHandler.getErrorMessage(e));
+    } catch (e) {
+      developer.log('[API] GET Unexpected error: $e');
+      rethrow;
     }
   }
 
@@ -97,15 +108,35 @@ class ApiService {
     Options? options,
   }) async {
     try {
+      // Log the full URL being called
+      final fullUrl = '${ApiConfig.baseUrl}$path';
+      developer.log('[API] POST Request to: $fullUrl');
+      developer.log('[API] Base URL: ${ApiConfig.baseUrl}');
+      developer.log('[API] Path: $path');
+      
       final response = await _dio.post(
         path,
         data: data,
         queryParameters: queryParameters,
         options: options,
       );
+      developer.log('[API] POST Response Status: ${response.statusCode}');
       return handleApiResponse(response, parser);
     } on DioException catch (e) {
+      // Log detailed error information
+      developer.log('[API] POST DioException Type: ${e.type}');
+      developer.log('[API] POST Error Message: ${e.message}');
+      developer.log('[API] POST Request URL: ${e.requestOptions.uri}');
+      if (e.response != null) {
+        developer.log('[API] POST Response Status: ${e.response?.statusCode}');
+        developer.log('[API] POST Response Data: ${e.response?.data}');
+      } else {
+        developer.log('[API] POST No response received - connection error');
+      }
       throw Exception(ApiErrorHandler.getErrorMessage(e));
+    } catch (e) {
+      developer.log('[API] POST Unexpected error: $e');
+      rethrow;
     }
   }
 

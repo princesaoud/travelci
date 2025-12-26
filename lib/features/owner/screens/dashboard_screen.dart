@@ -17,10 +17,35 @@ class OwnerDashboardScreen extends ConsumerStatefulWidget {
 
 class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
   @override
+  void initState() {
+    super.initState();
+    // Load properties when dashboard is opened
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(propertyProvider.notifier).loadProperties();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh properties when returning to this screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(propertyProvider.notifier).loadProperties();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
+    final propertyState = ref.watch(propertyProvider);
+    
+    // Get properties for this owner - use watch to get updates automatically
     final ownerProperties = user != null
-        ? ref.read(propertyProvider.notifier).getPropertiesByOwner(user.id)
+        ? propertyState.properties.where((p) => p.ownerId == user.id).toList()
         : <Property>[];
 
     return Scaffold(

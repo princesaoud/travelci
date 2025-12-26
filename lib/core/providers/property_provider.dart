@@ -136,8 +136,7 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
     try {
       return state.properties.firstWhere((p) => p.id == id);
     } catch (e) {
-      // Property not in cache, fetch it
-      _fetchPropertyById(id);
+      // Property not in cache, will be fetched when needed
       return null;
     }
   }

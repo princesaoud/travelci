@@ -26,15 +26,15 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(authProvider).user;
       if (user != null) {
-        ref.read(bookingProvider.notifier).loadBookings(user.id, user.role);
+        ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
       }
     });
   }
 
   void _handleAccept(String bookingId) {
     ref.read(bookingProvider.notifier).updateBookingStatus(
-          bookingId,
-          BookingStatus.accepted,
+          id: bookingId,
+          status: BookingStatus.accepted,
         );
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Réservation acceptée')),
@@ -43,8 +43,8 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
 
   void _handleDecline(String bookingId) {
     ref.read(bookingProvider.notifier).updateBookingStatus(
-          bookingId,
-          BookingStatus.declined,
+          id: bookingId,
+          status: BookingStatus.declined,
         );
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Réservation refusée')),

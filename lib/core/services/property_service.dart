@@ -78,6 +78,11 @@ class PropertyService extends ApiService {
       );
     }
 
+    // If we get here, there was an error
+    final apiResponse = ApiResponse<dynamic>.fromJson(
+      response,
+      (data) => data,
+    );
     throw Exception(apiResponse.error?.message ?? 'Impossible de récupérer les propriétés');
   }
 

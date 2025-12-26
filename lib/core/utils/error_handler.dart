@@ -58,7 +58,7 @@ class ApiErrorHandler {
         return 'Requête annulée.';
 
       case DioExceptionType.connectionError:
-        return 'Erreur de connexion. Vérifiez votre connexion Internet.';
+        return 'Impossible de se connecter au serveur. Vérifiez que le backend est en cours d\'exécution et que vous êtes sur le même réseau Wi-Fi.';
 
       case DioExceptionType.badCertificate:
         return 'Erreur de certificat SSL.';

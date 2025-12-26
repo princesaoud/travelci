@@ -31,19 +31,22 @@ class TravelCIApp extends ConsumerWidget {
           brightness: Brightness.light,
           primary: const Color(0xFFD32F2F), // Vibrant red
           onPrimary: Colors.white,
+          primaryContainer: const Color(0xFFD32F2F), // For Material 3 buttons
+          onPrimaryContainer: Colors.white,
           secondary: const Color(0xFF1976D2), // Vibrant blue
           onSecondary: Colors.white,
           error: const Color(0xFFD32F2F),
           onError: Colors.white,
           surface: Colors.white,
           onSurface: Colors.black87,
+          outline: Colors.grey,
         ),
         useMaterial3: true,
         appBarTheme: const AppBarTheme(
           centerTitle: false,
           elevation: 0,
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 2,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -52,6 +55,25 @@ class TravelCIApp extends ConsumerWidget {
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        // Button themes to ensure buttons are visible
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFD32F2F), // Primary red
+            foregroundColor: Colors.white, // White text
+            elevation: 2,
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFD32F2F), // Primary red text
+            side: const BorderSide(color: Color(0xFFD32F2F)), // Primary red border
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFFD32F2F), // Primary red text
           ),
         ),
       ),

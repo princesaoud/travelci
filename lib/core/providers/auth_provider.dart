@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/services/auth_service.dart';
@@ -52,8 +53,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Login user
-  Future<void> login(String email, String password) async {
-    state = state.copyWith(isLoading: true, error: null);
+  /// Returns true if login successful, false otherwise
+  Future<bool> login(String email, String password) async {
+    // Clear any existing user and errors before attempting login
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+      user: null, // Clear previous user
+    );
 
     try {
       final response = await _authService.login(
@@ -66,11 +73,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
         error: null,
       );
+      // Debug: Log user role after login
+      developer.log('Login successful - User: ${response.user.email}, Role: ${response.user.role}');
+      return true;
     } catch (e) {
+      // Ensure user is null on error
+      final errorMessage = e.toString().replaceFirst('Exception: ', '').replaceFirst('Bad state: ', '');
       state = state.copyWith(
+        user: null,
         isLoading: false,
-        error: e.toString().replaceFirst('Exception: ', ''),
+        error: errorMessage,
       );
+      return false;
     }
   }
 

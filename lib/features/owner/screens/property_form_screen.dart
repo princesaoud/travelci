@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
 import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
@@ -32,6 +33,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
   bool _furnished = false;
   final List<String> _amenities = [];
   final List<File> _selectedImages = [];
+  final List<String> _removedImageUrls = []; // Track removed existing images
   final ImagePicker _imagePicker = ImagePicker();
   final List<String> _availableAmenities = [
     'WiFi',
@@ -77,7 +79,10 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
         _furnished = property.furnished;
         _amenities.clear();
         _amenities.addAll(property.amenities);
-        // Note: Images are loaded from URLs in the API response
+        // Reset removed images list when loading property
+        _removedImageUrls.clear();
+        // Note: Existing images are loaded from URLs in the API response
+        // They will be displayed automatically via ref.watch
       }
     } catch (e) {
       if (mounted) {
@@ -118,6 +123,18 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
     });
   }
 
+  void _removeExistingImage(int index) {
+    setState(() {
+      final existingProperty = widget.propertyId != null
+          ? ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId!)
+          : null;
+      if (existingProperty != null && index < existingProperty.imageUrls.length) {
+        final imageUrl = existingProperty.imageUrls[index];
+        _removedImageUrls.add(imageUrl);
+      }
+    });
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -130,64 +147,70 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
 
   Future<void> _saveProperty() async {
     if (!_formKey.currentState!.validate()) return;
-      final user = ref.read(authProvider).user;
-      if (user == null) return;
+    
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
 
-      try {
-        if (widget.propertyId != null) {
-          // Update existing property
-          await ref.read(propertyProvider.notifier).updateProperty(
-                id: widget.propertyId!,
-                title: _titleController.text.trim(),
-                description: _descriptionController.text.trim().isEmpty
-                    ? null
-                    : _descriptionController.text.trim(),
-                type: _selectedType,
-                furnished: _furnished,
-                pricePerNight: double.parse(_priceController.text),
-                address: _addressController.text.trim(),
-                city: _cityController.text.trim(),
-                amenities: _amenities,
-              );
-
-          if (mounted) {
-            context.pop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Logement mis à jour')),
+    try {
+      if (widget.propertyId != null) {
+        // Update existing property
+        await ref.read(propertyProvider.notifier).updateProperty(
+              id: widget.propertyId!,
+              title: _titleController.text.trim(),
+              description: _descriptionController.text.trim().isEmpty
+                  ? null
+                  : _descriptionController.text.trim(),
+              type: _selectedType,
+              furnished: _furnished,
+              pricePerNight: double.parse(_priceController.text),
+              address: _addressController.text.trim(),
+              city: _cityController.text.trim(),
+              amenities: _amenities,
             );
-          }
-        } else {
-          // Create new property
-          await ref.read(propertyProvider.notifier).createProperty(
-                title: _titleController.text.trim(),
-                description: _descriptionController.text.trim().isEmpty
-                    ? null
-                    : _descriptionController.text.trim(),
-                type: _selectedType,
-                furnished: _furnished,
-                pricePerNight: double.parse(_priceController.text),
-                address: _addressController.text.trim(),
-                city: _cityController.text.trim(),
-                amenities: _amenities,
-                images: _selectedImages.isEmpty ? null : _selectedImages,
-              );
 
-          if (mounted) {
-            context.pop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Logement ajouté')),
-            );
-          }
-        }
-      } catch (e) {
         if (mounted) {
+          // Refresh properties to ensure dashboard shows the updated property
+          await ref.read(propertyProvider.notifier).refresh();
+          
+          context.pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erreur: ${e.toString().replaceFirst('Exception: ', '')}'),
-              backgroundColor: Colors.red,
-            ),
+            const SnackBar(content: Text('Logement mis à jour')),
           );
         }
+      } else {
+        // Create new property
+        await ref.read(propertyProvider.notifier).createProperty(
+              title: _titleController.text.trim(),
+              description: _descriptionController.text.trim().isEmpty
+                  ? null
+                  : _descriptionController.text.trim(),
+              type: _selectedType,
+              furnished: _furnished,
+              pricePerNight: double.parse(_priceController.text),
+              address: _addressController.text.trim(),
+              city: _cityController.text.trim(),
+              amenities: _amenities,
+              images: _selectedImages.isEmpty ? null : _selectedImages,
+            );
+
+        if (mounted) {
+          // Refresh properties to ensure dashboard shows the new property
+          await ref.read(propertyProvider.notifier).refresh();
+          
+          context.pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Logement ajouté')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -242,11 +265,16 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             Builder(
               builder: (context) {
                 final existingProperty = widget.propertyId != null
-                    ? ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId!)
+                    ? ref.watch(propertyProvider).propertyCache[widget.propertyId!] ??
+                      ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId!)
                     : null;
-                final hasExistingImages = existingProperty?.imageUrls.isNotEmpty ?? false;
+                // Filter out removed images
+                final existingImageUrls = (existingProperty?.imageUrls ?? [])
+                    .where((url) => !_removedImageUrls.contains(url))
+                    .toList();
+                final totalImages = existingImageUrls.length + _selectedImages.length;
                 
-                if (_selectedImages.isEmpty && !hasExistingImages) {
+                if (totalImages == 0) {
                   return OutlinedButton.icon(
                     onPressed: _pickImages,
                     icon: const Icon(FontAwesomeIcons.image),
@@ -264,42 +292,109 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                         height: 120,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
-                          itemCount: _selectedImages.length,
+                          itemCount: totalImages,
                           itemBuilder: (context, index) {
-                            return Container(
-                              margin: const EdgeInsets.only(right: 8),
-                              width: 120,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey[300]!),
-                              ),
-                              child: Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.file(
-                                      _selectedImages[index],
-                                      fit: BoxFit.cover,
-                                      width: 120,
-                                      height: 120,
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: IconButton(
-                                      icon: const Icon(FontAwesomeIcons.xmark, color: Colors.white),
-                                      style: IconButton.styleFrom(
-                                        backgroundColor: Colors.black54,
-                                        padding: const EdgeInsets.all(4),
-                                        minimumSize: const Size(32, 32),
+                            // Show existing images first, then new images
+                            if (index < existingImageUrls.length) {
+                              // Existing image from URL
+                              return Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                width: 120,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey[300]!),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: CachedNetworkImage(
+                                        imageUrl: existingImageUrls[index],
+                                        fit: BoxFit.cover,
+                                        width: 120,
+                                        height: 120,
+                                        placeholder: (context, url) => Container(
+                                          width: 120,
+                                          height: 120,
+                                          color: Colors.grey[200],
+                                          child: const Center(
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                        ),
+                                        errorWidget: (context, url, error) => Container(
+                                          width: 120,
+                                          height: 120,
+                                          color: Colors.grey[300],
+                                          child: const Icon(FontAwesomeIcons.image, size: 40),
+                                        ),
                                       ),
-                                      onPressed: () => _removeImage(index),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            );
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: IconButton(
+                                          icon: const Icon(FontAwesomeIcons.xmark, color: Colors.white, size: 16),
+                                          style: IconButton.styleFrom(
+                                            padding: const EdgeInsets.all(4),
+                                            minimumSize: const Size(32, 32),
+                                          ),
+                                          onPressed: () => _removeExistingImage(index),
+                                          tooltip: 'Supprimer cette image',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            } else {
+                              // New image from file
+                              final fileIndex = index - existingImageUrls.length;
+                              return Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                width: 120,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey[300]!),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.file(
+                                        _selectedImages[fileIndex],
+                                        fit: BoxFit.cover,
+                                        width: 120,
+                                        height: 120,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: IconButton(
+                                          icon: const Icon(FontAwesomeIcons.xmark, color: Colors.white, size: 16),
+                                          style: IconButton.styleFrom(
+                                            padding: const EdgeInsets.all(4),
+                                            minimumSize: const Size(32, 32),
+                                          ),
+                                          onPressed: () => _removeImage(fileIndex),
+                                          tooltip: 'Supprimer cette image',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
                           },
                         ),
                       ),
@@ -437,4 +532,3 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
     );
   }
 }
-
