@@ -7,7 +7,6 @@ import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
-import 'package:travelci/core/services/mock_data_service.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/date_formatter.dart';
 import 'package:travelci/features/owner/screens/owner_chat_screen.dart';
@@ -31,24 +30,113 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
     });
   }
 
-  void _handleAccept(String bookingId) {
-    ref.read(bookingProvider.notifier).updateBookingStatus(
-          id: bookingId,
-          status: BookingStatus.accepted,
-        );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Réservation acceptée')),
+  Future<void> _handleAccept(String bookingId) async {
+    final reason = await _showReasonDialog(
+      context: context,
+      title: 'Accepter la réservation',
+      hint: 'Message optionnel pour le client (ex: "Bienvenue ! Les clés seront disponibles à l\'arrivée.")',
     );
+    
+    try {
+      await ref.read(bookingProvider.notifier).updateBookingStatus(
+            id: bookingId,
+            status: BookingStatus.accepted,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(reason != null && reason.isNotEmpty 
+              ? 'Réservation acceptée avec message' 
+              : 'Réservation acceptée')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: ${e.toString()}')),
+        );
+      }
+    }
   }
 
-  void _handleDecline(String bookingId) {
-    ref.read(bookingProvider.notifier).updateBookingStatus(
-          id: bookingId,
-          status: BookingStatus.declined,
-        );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Réservation refusée')),
+  Future<void> _handleDecline(String bookingId) async {
+    final reason = await _showReasonDialog(
+      context: context,
+      title: 'Refuser la réservation',
+      hint: 'Motif du refus (obligatoire)',
+      isRequired: true,
     );
+    
+    if (reason == null || reason.isEmpty) {
+      return; // User cancelled or didn't provide reason
+    }
+    
+    try {
+      await ref.read(bookingProvider.notifier).updateBookingStatus(
+            id: bookingId,
+            status: BookingStatus.declined,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Réservation refusée')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  Future<String?> _showReasonDialog({
+    required BuildContext context,
+    required String title,
+    required String hint,
+    bool isRequired = false,
+  }) async {
+    final reasonController = TextEditingController();
+    String? result;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: reasonController,
+          decoration: InputDecoration(
+            labelText: isRequired ? 'Motif (obligatoire)' : 'Message (optionnel)',
+            hintText: hint,
+            border: const OutlineInputBorder(),
+          ),
+          maxLines: 4,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (isRequired && reasonController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Veuillez indiquer un motif')),
+                );
+                return;
+              }
+              result = reasonController.text.trim();
+              Navigator.pop(context);
+            },
+            child: Text(isRequired ? 'Refuser' : 'Accepter'),
+          ),
+        ],
+      ),
+    );
+
+    return result;
   }
 
   @override
@@ -70,30 +158,66 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
       appBar: AppBar(
         title: const Text('Demandes de réservation'),
       ),
-      body: ownerBookings.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(FontAwesomeIcons.inbox, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Aucune demande',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 18),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
+          await ref.read(propertyProvider.notifier).loadProperties();
+        },
+        child: ownerBookings.isEmpty
+            ? SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height - 200,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(FontAwesomeIcons.inbox, size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Aucune demande',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 18),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: ownerBookings.length,
-              itemBuilder: (context, index) {
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: ownerBookings.length,
+                itemBuilder: (context, index) {
                 final booking = ownerBookings[index];
                 final property = properties.firstWhere(
                   (p) => p.id == booking.propertyId,
+                  orElse: () => Property(
+                    id: booking.propertyId,
+                    ownerId: '',
+                    title: 'Propriété inconnue',
+                    description: '',
+                    type: PropertyType.apartment,
+                    address: '',
+                    city: '',
+                    pricePerNight: 0,
+                    amenities: [],
+                    imageUrls: [],
+                    furnished: false,
+                    createdAt: DateTime.now(),
+                    updatedAt: DateTime.now(),
+                  ),
                 );
-                final client = MockDataService.mockUsers.firstWhere(
-                  (u) => u.id == booking.clientId,
+                
+                // Create a minimal client object from booking data
+                // In the future, we could fetch full client data from API
+                final client = User(
+                  id: booking.clientId,
+                  fullName: 'Client ${booking.clientId.substring(0, 8)}',
+                  email: 'client@example.com',
+                  role: UserRole.client,
+                  phone: null,
+                  isVerified: false,
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
                 );
 
                 return _BookingRequestCard(
@@ -105,6 +229,7 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
                 );
               },
             ),
+      ),
     );
   }
 }
@@ -113,8 +238,8 @@ class _BookingRequestCard extends StatelessWidget {
   final Booking booking;
   final Property property;
   final User client;
-  final VoidCallback onAccept;
-  final VoidCallback onDecline;
+  final Future<void> Function() onAccept;
+  final Future<void> Function() onDecline;
 
   const _BookingRequestCard({
     required this.booking,
@@ -316,7 +441,9 @@ class _BookingRequestCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: onDecline,
+                      onPressed: () async {
+                        await onDecline();
+                      },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         side: const BorderSide(color: Colors.red),
@@ -327,7 +454,9 @@ class _BookingRequestCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: onAccept,
+                      onPressed: () async {
+                        await onAccept();
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                       ),

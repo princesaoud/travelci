@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:travelci/core/models/booking.dart';
 import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
+import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/features/owner/screens/owner_chat_screen.dart';
+import 'package:travelci/features/owner/screens/booking_requests_screen.dart';
 
 class OwnerDashboardScreen extends ConsumerStatefulWidget {
   const OwnerDashboardScreen({super.key});
@@ -19,10 +22,11 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Load properties when dashboard is opened
+    // Load properties and bookings when dashboard is opened
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(propertyProvider.notifier).loadProperties();
+        ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
       }
     });
   }
@@ -30,10 +34,11 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Refresh properties when returning to this screen
+    // Refresh properties and bookings when returning to this screen
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(propertyProvider.notifier).loadProperties();
+        ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
       }
     });
   }
@@ -42,11 +47,23 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
     final propertyState = ref.watch(propertyProvider);
+    final bookingState = ref.watch(bookingProvider);
     
     // Get properties for this owner - use watch to get updates automatically
     final ownerProperties = user != null
         ? propertyState.properties.where((p) => p.ownerId == user.id).toList()
         : <Property>[];
+    
+    // Get bookings for owner's properties
+    final ownerPropertyIds = ownerProperties.map((p) => p.id).toSet();
+    final ownerBookings = bookingState.bookings
+        .where((booking) => ownerPropertyIds.contains(booking.propertyId))
+        .toList();
+    
+    // Count only pending bookings for the stats card
+    final pendingBookings = ownerBookings
+        .where((booking) => booking.status == BookingStatus.pending)
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -67,7 +84,12 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
           IconButton(
             icon: const Icon(FontAwesomeIcons.bell),
             onPressed: () {
-              context.push('/owner/bookings');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BookingRequestsScreen(),
+                ),
+              );
             },
             tooltip: 'Demandes de réservation',
           ),
@@ -81,64 +103,84 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Stats cards
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    title: 'Mes logements',
-                    value: '${ownerProperties.length}',
-                    icon: FontAwesomeIcons.house,
-                    color: Colors.blue,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    title: 'Réservations',
-                    value: '0',
-                    icon: FontAwesomeIcons.bookmark,
-                    color: Colors.green,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Properties list
-          Expanded(
-            child: ownerProperties.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(FontAwesomeIcons.house, size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Aucun logement',
-                          style: TextStyle(color: Colors.grey[600], fontSize: 18),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Ajoutez votre premier logement',
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      ],
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(propertyProvider.notifier).loadProperties();
+          await ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
+        },
+        child: Column(
+          children: [
+            // Stats cards
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _StatCard(
+                      title: 'Mes logements',
+                      value: '${ownerProperties.length}',
+                      icon: FontAwesomeIcons.house,
+                      color: Colors.blue,
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: ownerProperties.length,
-                    itemBuilder: (context, index) {
-                      final property = ownerProperties[index];
-                      return _PropertyCard(property: property);
-                    },
                   ),
-          ),
-        ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _StatCard(
+                      title: 'Réservations en attente',
+                      value: '${pendingBookings.length}',
+                      icon: FontAwesomeIcons.bookmark,
+                      color: Colors.green,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const BookingRequestsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Properties list
+            Expanded(
+              child: ownerProperties.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height - 200,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(FontAwesomeIcons.house, size: 64, color: Colors.grey[400]),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Aucun logement',
+                                style: TextStyle(color: Colors.grey[600], fontSize: 18),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Ajoutez votre premier logement',
+                                style: TextStyle(color: Colors.grey[500]),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: ownerProperties.length,
+                      itemBuilder: (context, index) {
+                        final property = ownerProperties[index];
+                        return _PropertyCard(property: property);
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
@@ -156,17 +198,19 @@ class _StatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.title,
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    Widget cardContent = Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -191,6 +235,16 @@ class _StatCard extends StatelessWidget {
         ),
       ),
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: cardContent,
+      );
+    }
+
+    return cardContent;
   }
 }
 

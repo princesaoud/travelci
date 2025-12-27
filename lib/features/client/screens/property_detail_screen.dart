@@ -42,57 +42,65 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
       enableDrag: true,
       isDismissible: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _BookingSheet(
-        property: ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId)!,
-        startDate: _selectedStartDate,
-        endDate: _selectedEndDate,
-        guests: _guests,
-        messageController: _messageController,
-        onStartDateSelected: (date) {
-          setState(() {
-            _selectedStartDate = date;
-            if (_selectedEndDate != null && _selectedEndDate!.isBefore(date)) {
-              _selectedEndDate = null;
-            }
-          });
-        },
-        onEndDateSelected: (date) {
-          setState(() {
-            _selectedEndDate = date;
-          });
-        },
-        onGuestsChanged: (guests) {
-          setState(() {
-            _guests = guests;
-          });
-        },
-        onBook: () {
-          final property = ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId)!;
-          final user = ref.read(authProvider).user!;
-          
-          if (_selectedStartDate == null || _selectedEndDate == null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Veuillez sélectionner les dates')),
-            );
-            return;
-          }
-
-          final nights = _selectedEndDate!.difference(_selectedStartDate!).inDays;
-          final totalPrice = nights * property.pricePerNight;
-
-          ref.read(bookingProvider.notifier).createBooking(
-                propertyId: property.id,
-                startDate: _selectedStartDate!,
-                endDate: _selectedEndDate!,
-                guests: _guests,
-                message: _messageController.text.isEmpty ? null : _messageController.text,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => _BookingSheet(
+          property: ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId)!,
+          startDate: _selectedStartDate,
+          endDate: _selectedEndDate,
+          guests: _guests,
+          messageController: _messageController,
+          onStartDateSelected: (date) {
+            setState(() {
+              _selectedStartDate = date;
+              if (_selectedEndDate != null && _selectedEndDate!.isBefore(date)) {
+                _selectedEndDate = null;
+              }
+            });
+            // Forcer la reconstruction du bottom sheet
+            setModalState(() {});
+          },
+          onEndDateSelected: (date) {
+            setState(() {
+              _selectedEndDate = date;
+            });
+            // Forcer la reconstruction du bottom sheet
+            setModalState(() {});
+          },
+          onGuestsChanged: (guests) {
+            setState(() {
+              _guests = guests;
+            });
+            // Forcer la reconstruction du bottom sheet
+            setModalState(() {});
+          },
+          onBook: () {
+            final property = ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId)!;
+            final user = ref.read(authProvider).user!;
+            
+            if (_selectedStartDate == null || _selectedEndDate == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Veuillez sélectionner les dates')),
               );
+              return;
+            }
 
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Demande de réservation envoyée')),
-          );
-        },
+            final nights = _selectedEndDate!.difference(_selectedStartDate!).inDays;
+            final totalPrice = nights * property.pricePerNight;
+
+            ref.read(bookingProvider.notifier).createBooking(
+                  propertyId: property.id,
+                  startDate: _selectedStartDate!,
+                  endDate: _selectedEndDate!,
+                  guests: _guests,
+                  message: _messageController.text.isEmpty ? null : _messageController.text,
+                );
+
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Demande de réservation envoyée')),
+            );
+          },
+        ),
       ),
     );
   }
@@ -341,12 +349,32 @@ class _BookingSheetState extends State<_BookingSheet> {
   late DateTime _focusedDay;
   late TextEditingController _localMessageController;
 
+  // Helper pour normaliser les dates (sans heure)
+  DateTime _normalizeDate(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
+
   @override
   void initState() {
     super.initState();
     _focusedDay = widget.startDate ?? DateTime.now();
     _localMessageController = TextEditingController(text: widget.messageController.text);
     _localMessageController.addListener(_onMessageChanged);
+  }
+
+  @override
+  void didUpdateWidget(_BookingSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Mettre à jour _focusedDay si les dates ont changé
+    if (widget.startDate != oldWidget.startDate || widget.endDate != oldWidget.endDate) {
+      if (widget.startDate != null) {
+        _focusedDay = widget.startDate!;
+      }
+      // Forcer un rebuild pour mettre à jour le calendrier
+      if (mounted) {
+        setState(() {});
+      }
+    }
   }
 
   void _onMessageChanged() {
@@ -397,31 +425,75 @@ class _BookingSheetState extends State<_BookingSheet> {
           SizedBox(
             height: 350,
             child: TableCalendar(
+              key: ValueKey('${widget.startDate}_${widget.endDate}'),
               firstDay: DateTime.now(),
               lastDay: DateTime.now().add(const Duration(days: 365)),
               focusedDay: _focusedDay,
               selectedDayPredicate: (day) {
+                final normalizedDay = _normalizeDate(day);
                 if (widget.startDate != null && widget.endDate != null) {
-                  return day.isAtSameMomentAs(widget.startDate!) ||
-                      day.isAtSameMomentAs(widget.endDate!) ||
-                      (day.isAfter(widget.startDate!) && day.isBefore(widget.endDate!));
+                  final normalizedStart = _normalizeDate(widget.startDate!);
+                  final normalizedEnd = _normalizeDate(widget.endDate!);
+                  // Afficher le début, la fin, et tous les jours entre les deux
+                  return normalizedDay.isAtSameMomentAs(normalizedStart) ||
+                      normalizedDay.isAtSameMomentAs(normalizedEnd) ||
+                      (normalizedDay.isAfter(normalizedStart) && normalizedDay.isBefore(normalizedEnd));
                 }
-                return widget.startDate != null && day.isAtSameMomentAs(widget.startDate!);
+                if (widget.startDate != null) {
+                  final normalizedStart = _normalizeDate(widget.startDate!);
+                  return normalizedDay.isAtSameMomentAs(normalizedStart);
+                }
+                return false;
               },
-              rangeStartDay: widget.startDate,
-              rangeEndDay: widget.endDate,
+              rangeStartDay: widget.startDate != null ? _normalizeDate(widget.startDate!) : null,
+              rangeEndDay: widget.endDate != null ? _normalizeDate(widget.endDate!) : null,
+              rangeSelectionMode: RangeSelectionMode.toggledOn,
               onDaySelected: (selectedDay, focusedDay) {
                 if (mounted) {
                   setState(() {
                     _focusedDay = focusedDay;
                   });
                 }
-                if (widget.startDate == null || (widget.startDate != null && widget.endDate != null)) {
-                  widget.onStartDateSelected(selectedDay);
-                } else if (selectedDay.isAfter(widget.startDate!)) {
-                  widget.onEndDateSelected(selectedDay);
-                } else {
-                  widget.onStartDateSelected(selectedDay);
+                final normalizedSelected = _normalizeDate(selectedDay);
+                final today = _normalizeDate(DateTime.now());
+                
+                // Vérifier que la date sélectionnée n'est pas dans le passé
+                if (normalizedSelected.isBefore(today)) {
+                  return;
+                }
+                
+                // Logique simplifiée : toujours gérer la sélection manuellement
+                // Si aucune date de début n'est sélectionnée, sélectionner comme date de début
+                if (widget.startDate == null) {
+                  widget.onStartDateSelected(normalizedSelected);
+                }
+                // Si les deux dates sont déjà sélectionnées, commencer une nouvelle sélection
+                else if (widget.endDate != null) {
+                  widget.onStartDateSelected(normalizedSelected);
+                }
+                // Si seule la date de début est sélectionnée
+                else {
+                  final normalizedStart = _normalizeDate(widget.startDate!);
+                  if (normalizedSelected.isAfter(normalizedStart)) {
+                    // Si la date sélectionnée est après la date de début, c'est la date de fin
+                    widget.onEndDateSelected(normalizedSelected);
+                  } else {
+                    // Si la date sélectionnée est avant ou égale à la date de début, remplacer la date de début
+                    widget.onStartDateSelected(normalizedSelected);
+                  }
+                }
+              },
+              onRangeSelected: (start, end, focusedDay) {
+                if (mounted) {
+                  setState(() {
+                    _focusedDay = focusedDay;
+                  });
+                }
+                if (start != null) {
+                  widget.onStartDateSelected(_normalizeDate(start));
+                }
+                if (end != null) {
+                  widget.onEndDateSelected(_normalizeDate(end));
                 }
               },
               onPageChanged: (focusedDay) {

@@ -56,103 +56,114 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Rechercher une ville (ex: Abidjan)',
-                    prefixIcon: const Icon(FontAwesomeIcons.magnifyingGlass),
-                    suffixIcon: IconButton(
-                      icon: const Icon(FontAwesomeIcons.sliders),
-                      onPressed: () {
-                        context.push('/search');
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                  ),
-                  onChanged: (value) {
-                    setState(() {
-                      _searchCity = value.isEmpty ? 'Abidjan' : value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                // Quick filters
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilterChip(
-                        label: const Text('Appartement'),
-                        selected: _selectedType == PropertyType.apartment,
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedType = selected ? PropertyType.apartment : null;
-                          });
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(propertyProvider.notifier).loadProperties();
+        },
+        child: Column(
+          children: [
+            // Search bar
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher une ville (ex: Abidjan)',
+                      prefixIcon: const Icon(FontAwesomeIcons.magnifyingGlass),
+                      suffixIcon: IconButton(
+                        icon: const Icon(FontAwesomeIcons.sliders),
+                        onPressed: () {
+                          context.push('/search');
                         },
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilterChip(
-                        label: const Text('Villa'),
-                        selected: _selectedType == PropertyType.villa,
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedType = selected ? PropertyType.villa : null;
-                          });
-                        },
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
                     ),
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      label: const Text('Meublé'),
-                      selected: _furnished == true,
-                      onSelected: (selected) {
-                        setState(() {
-                          _furnished = selected ? true : null;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Properties list
-          Expanded(
-            child: filteredProperties.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(FontAwesomeIcons.magnifyingGlass, size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Aucun logement trouvé',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredProperties.length,
-                    itemBuilder: (context, index) {
-                      final property = filteredProperties[index];
-                      return _PropertyCard(property: property);
+                    onChanged: (value) {
+                      setState(() {
+                        _searchCity = value.isEmpty ? 'Abidjan' : value;
+                      });
                     },
                   ),
-          ),
-        ],
+                  const SizedBox(height: 12),
+                  // Quick filters
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilterChip(
+                          label: const Text('Appartement'),
+                          selected: _selectedType == PropertyType.apartment,
+                          onSelected: (selected) {
+                            setState(() {
+                              _selectedType = selected ? PropertyType.apartment : null;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilterChip(
+                          label: const Text('Villa'),
+                          selected: _selectedType == PropertyType.villa,
+                          onSelected: (selected) {
+                            setState(() {
+                              _selectedType = selected ? PropertyType.villa : null;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilterChip(
+                        label: const Text('Meublé'),
+                        selected: _furnished == true,
+                        onSelected: (selected) {
+                          setState(() {
+                            _furnished = selected ? true : null;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Properties list
+            Expanded(
+              child: filteredProperties.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height - 300,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(FontAwesomeIcons.magnifyingGlass, size: 64, color: Colors.grey[400]),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Aucun logement trouvé',
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: filteredProperties.length,
+                      itemBuilder: (context, index) {
+                        final property = filteredProperties[index];
+                        return _PropertyCard(property: property);
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
