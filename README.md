@@ -241,9 +241,38 @@ L'application est entièrement intégrée avec le backend TravelCI via une API R
 - États de chargement
 - Gestion des erreurs avec messages en français
 
+## 🔔 Système de Notifications Locales
+
+L'application utilise un système de **notifications locales** qui fonctionne sans Firebase :
+
+### Fonctionnalités
+- ✅ Notifications in-app (quand l'application est ouverte)
+- ✅ Notifications système (quand l'application est en arrière-plan)
+- ✅ Badge avec compteur de notifications non lues
+- ✅ Stockage local des notifications (persistance)
+- ✅ Types de notifications :
+  - Nouvelle demande de réservation (propriétaire)
+  - Réservation acceptée (client)
+  - Réservation refusée (client)
+  - Réservation annulée (propriétaire/client)
+
+### Comment ça fonctionne
+1. **Quand l'app est ouverte** : Les notifications sont créées automatiquement lors des événements (création de réservation, acceptation, etc.)
+2. **Quand l'app est en arrière-plan** : Les notifications système s'affichent
+3. **Stockage** : Toutes les notifications sont sauvegardées localement et persistent entre les sessions
+4. **Accès** : Cliquez sur l'icône de cloche dans le dashboard pour voir toutes les notifications
+
+### Limitations
+- ⚠️ Les notifications ne fonctionnent **pas** quand l'application est complètement fermée
+- ⚠️ Pas de notifications push depuis le backend (nécessiterait Firebase Cloud Messaging)
+
+### Pour ajouter Firebase (optionnel)
+Si vous souhaitez des notifications push même quand l'app est fermée, vous pouvez ajouter Firebase Cloud Messaging plus tard.
+
 ## 🔜 Prochaines étapes
 
-- [ ] Notifications push
+- [x] Notifications locales (implémenté)
+- [ ] Notifications push (Firebase Cloud Messaging - optionnel)
 - [ ] Paiements (CinetPay, Orange Money)
 - [ ] Géolocalisation et cartes
 - [ ] Système de favoris

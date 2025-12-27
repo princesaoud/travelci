@@ -8,6 +8,7 @@ import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
+import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 
 class PropertyDetailScreen extends ConsumerStatefulWidget {
@@ -87,13 +88,23 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
             final nights = _selectedEndDate!.difference(_selectedStartDate!).inDays;
             final totalPrice = nights * property.pricePerNight;
 
-            ref.read(bookingProvider.notifier).createBooking(
+            final booking = await ref.read(bookingProvider.notifier).createBooking(
                   propertyId: property.id,
                   startDate: _selectedStartDate!,
                   endDate: _selectedEndDate!,
                   guests: _guests,
                   message: _messageController.text.isEmpty ? null : _messageController.text,
                 );
+
+            // Send notification to owner
+            final user = ref.read(authProvider).user;
+            if (user != null) {
+              await ref.read(notificationProvider.notifier).notifyBookingRequest(
+                bookingId: booking.id,
+                propertyTitle: property.title,
+                clientName: user.fullName,
+              );
+            }
 
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(

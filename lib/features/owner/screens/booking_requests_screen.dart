@@ -7,6 +7,7 @@ import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
+import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/date_formatter.dart';
 import 'package:travelci/features/owner/screens/owner_chat_screen.dart';
@@ -38,10 +39,38 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
     );
     
     try {
-      await ref.read(bookingProvider.notifier).updateBookingStatus(
+      final booking = await ref.read(bookingProvider.notifier).updateBookingStatus(
             id: bookingId,
             status: BookingStatus.accepted,
           );
+      
+      // Get property for notification
+      final properties = ref.read(propertyProvider).properties;
+      final property = properties.firstWhere(
+        (p) => p.id == booking.propertyId,
+        orElse: () => Property(
+          id: '',
+          ownerId: '',
+          title: 'Logement',
+          description: '',
+          type: PropertyType.apartment,
+          furnished: false,
+          pricePerNight: 0,
+          address: '',
+          city: '',
+          imageUrls: [],
+          amenities: [],
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      
+      // Send notification to client
+      await ref.read(notificationProvider.notifier).notifyBookingAccepted(
+        bookingId: bookingId,
+        propertyTitle: property.title,
+      );
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(reason != null && reason.isNotEmpty 
@@ -71,10 +100,39 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
     }
     
     try {
-      await ref.read(bookingProvider.notifier).updateBookingStatus(
+      final booking = await ref.read(bookingProvider.notifier).updateBookingStatus(
             id: bookingId,
             status: BookingStatus.declined,
           );
+      
+      // Get property for notification
+      final properties = ref.read(propertyProvider).properties;
+      final property = properties.firstWhere(
+        (p) => p.id == booking.propertyId,
+        orElse: () => Property(
+          id: '',
+          ownerId: '',
+          title: 'Logement',
+          description: '',
+          type: PropertyType.apartment,
+          furnished: false,
+          pricePerNight: 0,
+          address: '',
+          city: '',
+          imageUrls: [],
+          amenities: [],
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      
+      // Send notification to client
+      await ref.read(notificationProvider.notifier).notifyBookingDeclined(
+        bookingId: bookingId,
+        propertyTitle: property.title,
+        reason: reason,
+      );
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Réservation refusée')),

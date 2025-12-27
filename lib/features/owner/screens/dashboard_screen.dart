@@ -7,6 +7,9 @@ import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
+import 'package:travelci/core/providers/notification_provider.dart';
+import 'package:travelci/core/widgets/notification_badge.dart';
+import 'package:travelci/features/shared/screens/notifications_screen.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/features/owner/screens/owner_chat_screen.dart';
 import 'package:travelci/features/owner/screens/booking_requests_screen.dart';
@@ -81,8 +84,19 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
             },
             tooltip: 'Messages',
           ),
-          IconButton(
+          NotificationBadge(
             icon: const Icon(FontAwesomeIcons.bell),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsScreen(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(FontAwesomeIcons.bookmark),
             onPressed: () {
               Navigator.push(
                 context,

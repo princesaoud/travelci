@@ -7,6 +7,7 @@ import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
+import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/date_formatter.dart';
 
@@ -200,7 +201,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
   }
 }
 
-class _BookingCard extends StatelessWidget {
+class _BookingCard extends ConsumerStatefulWidget {
   final Booking booking;
   final Property property;
 
@@ -209,6 +210,11 @@ class _BookingCard extends StatelessWidget {
     required this.property,
   });
 
+  @override
+  ConsumerState<_BookingCard> createState() => _BookingCardState();
+}
+
+class _BookingCardState extends ConsumerState<_BookingCard> {
   Color _getStatusColor(BookingStatus status) {
     switch (status) {
       case BookingStatus.pending:
@@ -235,6 +241,95 @@ class _BookingCard extends StatelessWidget {
     }
   }
 
+  void _showCancelConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Annuler la réservation'),
+        content: const Text(
+          'Êtes-vous sûr de vouloir annuler cette réservation ? Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Non'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await _handleCancel();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Oui, annuler'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleCancel() async {
+    try {
+      // Show loading indicator
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 16),
+              Text('Annulation en cours...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Cancel booking
+      await ref.read(bookingProvider.notifier).cancelBooking(widget.booking.id);
+
+      // Send notification to owner
+      await ref.read(notificationProvider.notifier).notifyBookingCancelled(
+        bookingId: widget.booking.id,
+        propertyTitle: widget.property.title,
+        isOwner: false, // This is from client side
+      );
+
+      // Reload bookings to get updated list
+      final user = ref.read(authProvider).user;
+      if (user != null) {
+        await ref.read(bookingProvider.notifier).loadBookings(role: 'client');
+      }
+
+      // Show success message
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Réservation annulée avec succès'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // Show error message
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().replaceFirst('Exception: ', ''),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -246,11 +341,11 @@ class _BookingCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                if (property.imageUrls.isNotEmpty)
+                if (widget.property.imageUrls.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
-                      property.imageUrls.first,
+                      widget.property.imageUrls.first,
                       width: 80,
                       height: 80,
                       fit: BoxFit.cover,
@@ -277,7 +372,7 @@ class _BookingCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        property.title,
+                        widget.property.title,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -285,7 +380,7 @@ class _BookingCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        property.city,
+                        widget.property.city,
                         style: TextStyle(color: Colors.grey[600]),
                       ),
                     ],
@@ -301,7 +396,7 @@ class _BookingCard extends StatelessWidget {
               children: [
                 const Text('Dates:'),
                 Text(
-                  '${DateFormatter.formatShortDate(booking.startDate)} - ${DateFormatter.formatShortDate(booking.endDate)}',
+                  '${DateFormatter.formatShortDate(widget.booking.startDate)} - ${DateFormatter.formatShortDate(widget.booking.endDate)}',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ],
@@ -311,7 +406,7 @@ class _BookingCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Voyageurs:'),
-                Text('${booking.guests}'),
+                Text('${widget.booking.guests}'),
               ],
             ),
             const SizedBox(height: 8),
@@ -320,7 +415,7 @@ class _BookingCard extends StatelessWidget {
               children: [
                 const Text('Total:'),
                 Text(
-                  CurrencyFormatter.formatXOF(booking.totalPrice),
+                  CurrencyFormatter.formatXOF(widget.booking.totalPrice),
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -338,22 +433,24 @@ class _BookingCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(booking.status).withOpacity(0.1),
+                    color: _getStatusColor(widget.booking.status).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    _getStatusText(booking.status),
+                    _getStatusText(widget.booking.status),
                     style: TextStyle(
-                      color: _getStatusColor(booking.status),
+                      color: _getStatusColor(widget.booking.status),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-                if (booking.status == BookingStatus.pending)
+                if (widget.booking.status == BookingStatus.pending ||
+                    widget.booking.status == BookingStatus.accepted)
                   TextButton(
-                    onPressed: () {
-                      // TODO: Cancel booking
-                    },
+                    onPressed: _showCancelConfirmationDialog,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red,
+                    ),
                     child: const Text('Annuler'),
                   ),
               ],

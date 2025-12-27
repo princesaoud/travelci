@@ -3,6 +3,7 @@
 /// Manages API base URL based on the platform/device type
 class ApiConfig {
   // Base URLs for different environments
+  static const String productionBaseUrl = 'https://travelci-backend.vercel.app';
   static const String androidEmulatorBaseUrl = 'http://10.0.2.2:3000';
   static const String iosSimulatorBaseUrl = 'http://localhost:3000';
   static const String physicalDeviceBaseUrl = 'http://192.168.100.10:3000'; // Your testing IP - Updated to match your current IP
@@ -17,9 +18,8 @@ class ApiConfig {
   // Get base URL based on environment
   // You can modify this to detect the platform or use a specific URL
   static String get baseUrl {
-    // For now, default to physical device URL
-    // You can change this or add platform detection
-    return physicalDeviceBaseUrl;
+    // Production URL - Backend deployed on Vercel
+    return productionBaseUrl;
   }
 
   // Get full API URL (for reference only, not used in Dio calls)

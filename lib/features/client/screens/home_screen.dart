@@ -20,7 +20,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool? _furnished;
 
   @override
+  void initState() {
+    super.initState();
+    // Load properties when screen is first displayed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(propertyProvider.notifier).loadProperties();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh properties when returning to this screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(propertyProvider.notifier).loadProperties();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Watch property state to get reactive updates
+    final propertyState = ref.watch(propertyProvider);
+    
     final filteredProperties = ref.read(propertyProvider.notifier).searchProperties(
           city: _searchCity,
           type: _selectedType,
@@ -133,34 +158,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             // Properties list
             Expanded(
-              child: filteredProperties.isEmpty
-                  ? SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      child: SizedBox(
-                        height: MediaQuery.of(context).size.height - 300,
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(FontAwesomeIcons.magnifyingGlass, size: 64, color: Colors.grey[400]),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Aucun logement trouvé',
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+              child: propertyState.isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: filteredProperties.length,
-                      itemBuilder: (context, index) {
-                        final property = filteredProperties[index];
-                        return _PropertyCard(property: property);
-                      },
-                    ),
+                  : filteredProperties.isEmpty
+                      ? SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height - 300,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(FontAwesomeIcons.magnifyingGlass, size: 64, color: Colors.grey[400]),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Aucun logement trouvé',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: filteredProperties.length,
+                          itemBuilder: (context, index) {
+                            final property = filteredProperties[index];
+                            return _PropertyCard(property: property);
+                          },
+                        ),
             ),
           ],
         ),
