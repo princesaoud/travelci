@@ -44,6 +44,13 @@ class ApiConfig {
   // Image endpoints - use relative paths
   static String get imagesEndpoint => '$apiPath/images';
 
+  // Chat endpoints - use relative paths
+  static String get conversationsEndpoint => '$apiPath/conversations';
+  static String conversationEndpoint(String id) => '$apiPath/conversations/$id';
+  static String conversationMessagesEndpoint(String id) => '$apiPath/conversations/$id/messages';
+  static String conversationUnreadCountEndpoint(String id) => '$apiPath/conversations/$id/unread-count';
+  static String messageReadEndpoint(String id) => '$apiPath/messages/$id/read';
+
   // Request timeout
   static const Duration requestTimeout = Duration(seconds: 30);
 }

@@ -8,7 +8,9 @@ import 'package:travelci/features/client/screens/home_screen.dart';
 import 'package:travelci/features/client/screens/my_bookings_screen.dart';
 import 'package:travelci/features/client/screens/property_detail_screen.dart';
 import 'package:travelci/features/client/screens/search_screen.dart';
-import 'package:travelci/features/client/screens/chat_screen.dart';
+import 'package:travelci/features/shared/screens/conversations_list_screen.dart';
+import 'package:travelci/features/shared/screens/chat_detail_screen.dart';
+import 'package:travelci/core/models/conversation.dart';
 import 'package:travelci/features/client/screens/client_navigation_wrapper.dart';
 import 'package:travelci/features/owner/screens/booking_requests_screen.dart';
 import 'package:travelci/features/owner/screens/dashboard_screen.dart';
@@ -127,7 +129,21 @@ final routerProvider = Provider<GoRouter>((ref) {
               if (authState.user == null) {
                 return const HomeScreen(); // Will redirect via redirect logic
               }
-              return const ChatScreen();
+              return const ConversationsListScreen();
+            },
+          ),
+          GoRoute(
+            path: '/chat/:id',
+            builder: (context, state) {
+              if (authState.user == null) {
+                return const HomeScreen(); // Will redirect via redirect logic
+              }
+              final conversation = state.extra as Conversation?;
+              if (conversation == null) {
+                // If no conversation passed, try to get from state
+                return const ConversationsListScreen();
+              }
+              return ChatDetailScreen(conversation: conversation);
             },
           ),
         ],

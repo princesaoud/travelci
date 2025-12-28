@@ -147,9 +147,14 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
 
   Future<void> _saveProperty() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isLoading) return; // Prevent multiple submissions
     
     final user = ref.read(authProvider).user;
     if (user == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       if (widget.propertyId != null) {
@@ -212,6 +217,12 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -228,6 +239,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
           children: [
             TextFormField(
               controller: _titleController,
+              enabled: !_isLoading,
               decoration: const InputDecoration(
                 labelText: 'Titre',
                 border: OutlineInputBorder(),
@@ -243,6 +255,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _descriptionController,
+              enabled: !_isLoading,
               decoration: const InputDecoration(
                 labelText: 'Description',
                 border: OutlineInputBorder(),
@@ -276,7 +289,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                 
                 if (totalImages == 0) {
                   return OutlinedButton.icon(
-                    onPressed: _pickImages,
+                    onPressed: _isLoading ? null : _pickImages,
                     icon: const Icon(FontAwesomeIcons.image),
                     label: const Text('Ajouter des photos'),
                     style: OutlinedButton.styleFrom(
@@ -343,7 +356,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                                             padding: const EdgeInsets.all(4),
                                             minimumSize: const Size(32, 32),
                                           ),
-                                          onPressed: () => _removeExistingImage(index),
+                                          onPressed: _isLoading ? null : () => _removeExistingImage(index),
                                           tooltip: 'Supprimer cette image',
                                         ),
                                       ),
@@ -386,7 +399,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                                             padding: const EdgeInsets.all(4),
                                             minimumSize: const Size(32, 32),
                                           ),
-                                          onPressed: () => _removeImage(fileIndex),
+                                          onPressed: _isLoading ? null : () => _removeImage(fileIndex),
                                           tooltip: 'Supprimer cette image',
                                         ),
                                       ),
@@ -400,7 +413,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                       ),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
-                        onPressed: _pickImages,
+                        onPressed: _isLoading ? null : _pickImages,
                         icon: const Icon(FontAwesomeIcons.image),
                         label: const Text('Ajouter plus de photos'),
                       ),
@@ -426,7 +439,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                   child: Text('Villa'),
                 ),
               ],
-              onChanged: (value) {
+              onChanged: _isLoading ? null : (value) {
                 if (value != null) {
                   setState(() {
                     _selectedType = value;
@@ -438,7 +451,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             SwitchListTile(
               title: const Text('Meublé'),
               value: _furnished,
-              onChanged: (value) {
+              onChanged: _isLoading ? null : (value) {
                 setState(() {
                   _furnished = value;
                 });
@@ -447,6 +460,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _addressController,
+              enabled: !_isLoading,
               decoration: const InputDecoration(
                 labelText: 'Adresse',
                 border: OutlineInputBorder(),
@@ -462,6 +476,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _cityController,
+              enabled: !_isLoading,
               decoration: const InputDecoration(
                 labelText: 'Ville',
                 border: OutlineInputBorder(),
@@ -476,6 +491,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _priceController,
+              enabled: !_isLoading,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'Prix par nuit (XOF)',
@@ -506,7 +522,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                 return FilterChip(
                   label: Text(amenity),
                   selected: isSelected,
-                  onSelected: (selected) {
+                  onSelected: _isLoading ? null : (selected) {
                     setState(() {
                       if (selected) {
                         _amenities.add(amenity);
@@ -520,11 +536,20 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             ),
             const SizedBox(height: 32),
             ElevatedButton(
-              onPressed: _saveProperty,
+              onPressed: _isLoading ? null : _saveProperty,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              child: Text(widget.propertyId != null ? 'Mettre à jour' : 'Ajouter'),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Text(widget.propertyId != null ? 'Mettre à jour' : 'Ajouter'),
             ),
           ],
         ),

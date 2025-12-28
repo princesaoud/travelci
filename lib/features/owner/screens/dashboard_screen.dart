@@ -11,7 +11,7 @@ import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/widgets/notification_badge.dart';
 import 'package:travelci/features/shared/screens/notifications_screen.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
-import 'package:travelci/features/owner/screens/owner_chat_screen.dart';
+import 'package:travelci/features/shared/screens/conversations_list_screen.dart';
 import 'package:travelci/features/owner/screens/booking_requests_screen.dart';
 
 class OwnerDashboardScreen extends ConsumerStatefulWidget {
@@ -78,7 +78,7 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const OwnerChatScreen(),
+                  builder: (context) => const ConversationsListScreen(),
                 ),
               );
             },
@@ -244,6 +244,8 @@ class _StatCard extends StatelessWidget {
             Text(
               title,
               style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -262,13 +264,59 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _PropertyCard extends StatelessWidget {
+class _PropertyCard extends ConsumerWidget {
   final Property property;
 
   const _PropertyCard({required this.property});
 
+  Future<void> _showDeleteConfirmation(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer le logement'),
+        content: Text(
+          'Êtes-vous sûr de vouloir supprimer "${property.title}" ?\n\nCette action est irréversible.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      try {
+        await ref.read(propertyProvider.notifier).deleteProperty(property.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Logement supprimé avec succès'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur lors de la suppression: ${e.toString().replaceFirst('Exception: ', '')}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
@@ -315,14 +363,20 @@ class _PropertyCard extends StatelessWidget {
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${property.city}, ${property.address}',
                       style: TextStyle(color: Colors.grey[600]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -347,8 +401,7 @@ class _PropertyCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (property.furnished) ...[
-                          const SizedBox(width: 8),
+                        if (property.furnished)
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -366,7 +419,6 @@ class _PropertyCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                        ],
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -386,6 +438,13 @@ class _PropertyCard extends StatelessWidget {
                 onPressed: () {
                   context.push('/owner/property/${property.id}');
                 },
+                tooltip: 'Modifier',
+              ),
+              IconButton(
+                icon: const Icon(FontAwesomeIcons.trash),
+                onPressed: () => _showDeleteConfirmation(context, ref),
+                tooltip: 'Supprimer',
+                color: Colors.red,
               ),
             ],
           ),

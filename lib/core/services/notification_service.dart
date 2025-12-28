@@ -51,6 +51,7 @@ class NotificationService {
 
   /// Request notification permissions
   Future<void> _requestPermissions() async {
+    // Request Android permissions (Android 13+)
     final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     
@@ -58,16 +59,8 @@ class NotificationService {
       await androidPlugin.requestNotificationsPermission();
     }
 
-    final iosPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-        DarwinFlutterLocalNotificationsPlugin>();
-    
-    if (iosPlugin != null) {
-      await iosPlugin.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-    }
+    // iOS permissions are automatically requested via DarwinInitializationSettings
+    // in the initialize() method, so no need to request them explicitly here
   }
 
   /// Handle notification tap

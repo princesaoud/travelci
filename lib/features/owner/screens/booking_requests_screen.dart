@@ -10,7 +10,10 @@ import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/date_formatter.dart';
-import 'package:travelci/features/owner/screens/owner_chat_screen.dart';
+import 'package:travelci/core/models/conversation.dart';
+import 'package:travelci/core/providers/chat_provider.dart';
+import 'package:travelci/features/shared/screens/chat_detail_screen.dart';
+import 'package:travelci/features/shared/screens/conversations_list_screen.dart';
 
 class BookingRequestsScreen extends ConsumerStatefulWidget {
   const BookingRequestsScreen({super.key});
@@ -292,7 +295,7 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
   }
 }
 
-class _BookingRequestCard extends StatelessWidget {
+class _BookingRequestCard extends ConsumerWidget {
   final Booking booking;
   final Property property;
   final User client;
@@ -334,7 +337,7 @@ class _BookingRequestCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -454,6 +457,21 @@ class _BookingRequestCard extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Date de demande:'),
+                Text(
+                  DateFormatter.formatDate(booking.createdAt),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[700],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
             if (booking.message != null && booking.message!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
@@ -484,11 +502,12 @@ class _BookingRequestCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
+                      onPressed: () async {
+                        // Navigate to conversations list
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const OwnerChatScreen(),
+                            builder: (context) => const ConversationsListScreen(),
                           ),
                         );
                       },
@@ -526,16 +545,47 @@ class _BookingRequestCard extends StatelessWidget {
             ] else ...[
               const SizedBox(height: 16),
               OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => OwnerChatScreen(
-                        clientId: client.id,
+                onPressed: () async {
+                  // Try to find or create conversation for this booking
+                  try {
+                    // First, try to get existing conversation
+                    final conversations = ref.read(chatProvider).conversations;
+                    var conversation = conversations.firstWhere(
+                      (conv) => conv.bookingId == booking.id,
+                      orElse: () => Conversation(
+                        id: '',
                         bookingId: booking.id,
+                        clientId: booking.clientId,
+                        ownerId: '',
+                        propertyId: booking.propertyId,
+                        createdAt: DateTime.now(),
+                        updatedAt: DateTime.now(),
                       ),
-                    ),
-                  );
+                    );
+
+                    // If conversation doesn't exist, create it
+                    if (conversation.id.isEmpty) {
+                      conversation = await ref.read(chatProvider.notifier).createConversation(booking.id);
+                    }
+
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatDetailScreen(conversation: conversation),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Erreur: ${e.toString().replaceFirst('Exception: ', '')}'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 },
                 icon: const Icon(FontAwesomeIcons.comments),
                 label: const Text('Chatter avec le client'),

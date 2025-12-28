@@ -54,7 +54,7 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
     try {
       _prefs = await SharedPreferences.getInstance();
       await _notificationService.initialize();
-      await _loadNotifications();
+      await loadNotifications();
       _initialized = true;
     } catch (e) {
       state = state.copyWith(error: e.toString());

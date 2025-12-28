@@ -74,7 +74,7 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
             // Forcer la reconstruction du bottom sheet
             setModalState(() {});
           },
-          onBook: () {
+          onBook: () async {
             final property = ref.read(propertyProvider.notifier).getPropertyById(widget.propertyId)!;
             final user = ref.read(authProvider).user!;
             
@@ -88,28 +88,35 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
             final nights = _selectedEndDate!.difference(_selectedStartDate!).inDays;
             final totalPrice = nights * property.pricePerNight;
 
-            final booking = await ref.read(bookingProvider.notifier).createBooking(
-                  propertyId: property.id,
-                  startDate: _selectedStartDate!,
-                  endDate: _selectedEndDate!,
-                  guests: _guests,
-                  message: _messageController.text.isEmpty ? null : _messageController.text,
-                );
+            try {
+              final booking = await ref.read(bookingProvider.notifier).createBooking(
+                    propertyId: property.id,
+                    startDate: _selectedStartDate!,
+                    endDate: _selectedEndDate!,
+                    guests: _guests,
+                    message: _messageController.text.isEmpty ? null : _messageController.text,
+                  );
 
-            // Send notification to owner
-            final user = ref.read(authProvider).user;
-            if (user != null) {
+              // Send notification to owner
               await ref.read(notificationProvider.notifier).notifyBookingRequest(
                 bookingId: booking.id,
                 propertyTitle: property.title,
                 clientName: user.fullName,
               );
-            }
 
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Demande de réservation envoyée')),
-            );
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Demande de réservation envoyée')),
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Erreur: ${e.toString()}')),
+                );
+              }
+            }
           },
         ),
       ),
