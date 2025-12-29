@@ -48,6 +48,7 @@ class ApiConfig {
   static String get conversationsEndpoint => '$apiPath/conversations';
   static String conversationEndpoint(String id) => '$apiPath/conversations/$id';
   static String conversationMessagesEndpoint(String id) => '$apiPath/conversations/$id/messages';
+  static String conversationUploadFileEndpoint(String id) => '$apiPath/conversations/$id/upload-file';
   static String conversationUnreadCountEndpoint(String id) => '$apiPath/conversations/$id/unread-count';
   static String messageReadEndpoint(String id) => '$apiPath/messages/$id/read';
 

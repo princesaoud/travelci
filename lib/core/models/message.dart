@@ -9,10 +9,15 @@ class Message extends Equatable {
   final String conversationId;
   final String senderId;
   final String content;
-  final String messageType; // 'text', 'image', 'file'
+  final String messageType; // 'text', 'image', 'file', 'system'
   final bool isRead;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  
+  // File attachments (for file/image messages)
+  final String? fileUrl;
+  final String? fileName;
+  final int? fileSize; // in bytes
   
   // Relations (optional, populated from API)
   final User? sender;
@@ -26,6 +31,9 @@ class Message extends Equatable {
     this.isRead = false,
     required this.createdAt,
     this.updatedAt,
+    this.fileUrl,
+    this.fileName,
+    this.fileSize,
     this.sender,
   });
 
@@ -41,6 +49,9 @@ class Message extends Equatable {
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String)
           : null,
+      fileUrl: json['file_url'] as String?,
+      fileName: json['file_name'] as String?,
+      fileSize: json['file_size'] as int?,
       sender: json['sender'] != null
           ? User.fromJson(json['sender'] as Map<String, dynamic>)
           : null,
@@ -57,6 +68,9 @@ class Message extends Equatable {
       'is_read': isRead,
       'created_at': createdAt.toIso8601String(),
       if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
+      if (fileUrl != null) 'file_url': fileUrl,
+      if (fileName != null) 'file_name': fileName,
+      if (fileSize != null) 'file_size': fileSize,
       if (sender != null) 'sender': sender!.toJson(),
     };
   }
@@ -70,6 +84,9 @@ class Message extends Equatable {
     bool? isRead,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? fileUrl,
+    String? fileName,
+    int? fileSize,
     User? sender,
   }) {
     return Message(
@@ -81,6 +98,9 @@ class Message extends Equatable {
       isRead: isRead ?? this.isRead,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      fileUrl: fileUrl ?? this.fileUrl,
+      fileName: fileName ?? this.fileName,
+      fileSize: fileSize ?? this.fileSize,
       sender: sender ?? this.sender,
     );
   }
@@ -95,6 +115,9 @@ class Message extends Equatable {
         isRead,
         createdAt,
         updatedAt,
+        fileUrl,
+        fileName,
+        fileSize,
         sender,
       ];
 }

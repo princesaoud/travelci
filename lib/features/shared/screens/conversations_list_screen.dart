@@ -33,7 +33,24 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(authProvider).user;
       if (user != null) {
+        print('[ConversationsList] Loading conversations for user: ${user.id}, role: ${user.role.value}');
         ref.read(chatProvider.notifier).loadConversations(
+          role: user.role.value,
+        );
+      } else {
+        print('[ConversationsList] No user found, cannot load conversations');
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh conversations when returning to this screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = ref.read(authProvider).user;
+      if (user != null && mounted) {
+        ref.read(chatProvider.notifier).refreshConversations(
           role: user.role.value,
         );
       }
@@ -134,122 +151,145 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
           Expanded(
             child: chatState.isLoading && conversations.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : conversations.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              _searchQuery.isNotEmpty
-                                  ? FontAwesomeIcons.magnifyingGlass
-                                  : FontAwesomeIcons.comments,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _searchQuery.isNotEmpty
-                                  ? 'Aucune conversation trouvée'
-                                  : 'Aucune conversation',
-                              style: TextStyle(color: Colors.grey[600], fontSize: 18),
-                            ),
-                            if (!_searchQuery.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'Vos conversations apparaîtront ici',
-                                style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                              ),
-                            ],
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: () async {
-                          await ref.read(chatProvider.notifier).refreshConversations(
-                            role: user.role.value,
-                          );
-                        },
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: conversations.length,
-                          itemBuilder: (context, index) {
-                            final conversation = conversations[index];
-                            final otherUser = _getOtherUser(conversation, user);
-
-                            if (otherUser == null) {
-                              return const SizedBox.shrink();
-                            }
-
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: Theme.of(context).colorScheme.primary,
-                                  child: Text(
-                                    otherUser.fullName[0].toUpperCase(),
-                                    style: const TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                                title: Text(
-                                  otherUser.fullName,
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                : RefreshIndicator(
+                    onRefresh: () async {
+                      await ref.read(chatProvider.notifier).refreshConversations(
+                        role: user.role.value,
+                      );
+                    },
+                    child: conversations.isEmpty
+                        ? SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: SizedBox(
+                              height: MediaQuery.of(context).size.height - 200,
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      conversation.lastMessage?.content ?? 'Aucun message',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 14,
-                                      ),
+                                    Icon(
+                                      _searchQuery.isNotEmpty
+                                          ? FontAwesomeIcons.magnifyingGlass
+                                          : FontAwesomeIcons.comments,
+                                      size: 64,
+                                      color: Colors.grey[400],
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 16),
                                     Text(
-                                      _formatLastMessageTime(conversation.lastMessageAt),
-                                      style: TextStyle(
-                                        color: Colors.grey[500],
-                                        fontSize: 12,
-                                      ),
+                                      _searchQuery.isNotEmpty
+                                          ? 'Aucune conversation trouvée'
+                                          : 'Aucune conversation',
+                                      style: TextStyle(color: Colors.grey[600], fontSize: 18),
                                     ),
+                                    if (!_searchQuery.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Vos conversations apparaîtront ici',
+                                        style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                                      ),
+                                    ],
                                   ],
                                 ),
-                                trailing: conversation.unreadCount != null &&
-                                        conversation.unreadCount! > 0
-                                    ? Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: const BoxDecoration(
-                                          color: Colors.red,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Text(
-                                          '${conversation.unreadCount}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      )
-                                    : null,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ChatDetailScreen(
-                                        conversation: conversation,
-                                      ),
-                                    ),
-                                  );
-                                },
                               ),
-                            );
-                          },
-                        ),
-                      ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: conversations.length,
+                            itemBuilder: (context, index) {
+                              final conversation = conversations[index];
+                              final otherUser = _getOtherUser(conversation, user);
+
+                              if (otherUser == null) {
+                                return const SizedBox.shrink();
+                              }
+
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: Theme.of(context).colorScheme.primary,
+                                    child: Text(
+                                      otherUser.fullName[0].toUpperCase(),
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                  title: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        conversation.propertyTitle ?? 'Réservation',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: Theme.of(context).colorScheme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        otherUser.fullName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        conversation.lastMessage?.content ?? 'Aucun message',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _formatLastMessageTime(conversation.lastMessageAt),
+                                        style: TextStyle(
+                                          color: Colors.grey[500],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  trailing: conversation.unreadCount != null &&
+                                          conversation.unreadCount! > 0
+                                      ? Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.red,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Text(
+                                            '${conversation.unreadCount}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        )
+                                      : null,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ChatDetailScreen(
+                                          conversation: conversation,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
           ),
         ],
       ),

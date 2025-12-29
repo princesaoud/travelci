@@ -1,8 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:travelci/core/models/api_response.dart';
 import 'package:travelci/core/models/conversation.dart';
 import 'package:travelci/core/models/message.dart';
 import 'package:travelci/core/services/api_service.dart';
 import 'package:travelci/core/utils/api_config.dart';
+import 'package:travelci/core/utils/error_handler.dart';
+import 'package:travelci/core/utils/token_manager.dart';
 
 /// Chat Service
 /// 
@@ -25,6 +28,9 @@ class ChatService extends ApiService {
       queryParams['role'] = role;
     }
 
+    print('[ChatService] Fetching conversations with params: $queryParams');
+    print('[ChatService] Endpoint: ${ApiConfig.conversationsEndpoint}');
+
     final response = await get<Map<String, dynamic>>(
       ApiConfig.conversationsEndpoint,
       queryParameters: queryParams,
@@ -36,12 +42,35 @@ class ChatService extends ApiService {
       (data) => data,
     );
 
+    print('[ChatService] API Response: ${apiResponse.data}');
+    print('[ChatService] API Success: ${apiResponse.success}');
+    print('[ChatService] API Error: ${apiResponse.error}');
+
     if (apiResponse.data != null) {
-      final conversationsData = apiResponse.data!['conversations'] as List<dynamic>?;
+      // Try different possible response formats
+      List<dynamic>? conversationsData;
+      
+      // Format 1: data.conversations (array)
+      if (apiResponse.data!['conversations'] is List) {
+        conversationsData = apiResponse.data!['conversations'] as List<dynamic>;
+      }
+      // Format 2: data is directly an array
+      else if (apiResponse.data is List) {
+        conversationsData = apiResponse.data as List<dynamic>;
+      }
+      // Format 3: data.data.conversations (nested)
+      else if (apiResponse.data!['data'] is Map && 
+               (apiResponse.data!['data'] as Map<String, dynamic>)['conversations'] is List) {
+        conversationsData = (apiResponse.data!['data'] as Map<String, dynamic>)['conversations'] as List<dynamic>;
+      }
+
       if (conversationsData != null) {
+        print('[ChatService] Found ${conversationsData.length} conversations');
         return conversationsData
             .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
             .toList();
+      } else {
+        print('[ChatService] No conversations found in response data');
       }
     }
 
@@ -137,15 +166,72 @@ class ChatService extends ApiService {
     throw Exception(apiResponse.error?.message ?? 'Impossible de récupérer les messages');
   }
 
+  /// Upload a file for a message
+  Future<Map<String, dynamic>> uploadFile({
+    required String conversationId,
+    required String filePath,
+    required String fileName,
+  }) async {
+    final token = await TokenManager.getToken();
+    if (token == null) {
+      throw Exception('Vous devez être connecté pour envoyer un fichier');
+    }
+
+    final file = await MultipartFile.fromFile(
+      filePath,
+      filename: fileName,
+    );
+
+    final formData = FormData.fromMap({
+      'file': file,
+    });
+
+    try {
+      final response = await dio.post(
+        ApiConfig.conversationUploadFileEndpoint(conversationId),
+        data: formData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+      );
+
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response.data as Map<String, dynamic>,
+        (data) => data,
+      );
+
+      if (apiResponse.data != null) {
+        return {
+          'file_url': apiResponse.data!['file_url'] as String,
+          'file_name': apiResponse.data!['file_name'] as String,
+          'file_size': apiResponse.data!['file_size'] as int,
+        };
+      }
+
+      throw Exception(apiResponse.error?.message ?? 'Erreur lors du téléchargement du fichier');
+    } on DioException catch (e) {
+      throw Exception(ApiErrorHandler.getErrorMessage(e));
+    }
+  }
+
   /// Send a message in a conversation
   Future<Message> sendMessage({
     required String conversationId,
     required String content,
+    String? fileUrl,
+    String? fileName,
+    int? fileSize,
   }) async {
     final response = await post<Map<String, dynamic>>(
       ApiConfig.conversationMessagesEndpoint(conversationId),
       data: {
         'content': content,
+        if (fileUrl != null) 'file_url': fileUrl,
+        if (fileName != null) 'file_name': fileName,
+        if (fileSize != null) 'file_size': fileSize,
       },
       parser: (data) => data as Map<String, dynamic>,
     );

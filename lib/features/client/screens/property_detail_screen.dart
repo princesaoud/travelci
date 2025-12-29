@@ -9,6 +9,7 @@ import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
+import 'package:travelci/core/providers/chat_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 
 class PropertyDetailScreen extends ConsumerStatefulWidget {
@@ -85,9 +86,6 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
               return;
             }
 
-            final nights = _selectedEndDate!.difference(_selectedStartDate!).inDays;
-            final totalPrice = nights * property.pricePerNight;
-
             try {
               final booking = await ref.read(bookingProvider.notifier).createBooking(
                     propertyId: property.id,
@@ -104,18 +102,50 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
                 clientName: user.fullName,
               );
 
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Demande de réservation envoyée')),
-                );
+              // Refresh conversations to show the newly created conversation
+              // The backend should auto-create a conversation when booking is created
+              // Wait a bit for the backend to create the conversation (it's async)
+              // Increased delay to ensure conversation is created
+              await Future.delayed(const Duration(milliseconds: 1500));
+              try {
+                print('[PropertyDetail] Refreshing conversations for user: ${user.id}, role: ${user.role.value}');
+                await ref.read(chatProvider.notifier).refreshConversations(role: user.role.value);
+                print('[PropertyDetail] Conversations refreshed after booking creation');
+              } catch (e) {
+                // Log but don't fail the booking creation if conversation refresh fails
+                print('[PropertyDetail] Failed to refresh conversations: $e');
               }
+
+              // Show success message first
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Demande de réservation envoyée avec succès'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                
+                // Wait a bit for user to see the message, then close
+                await Future.delayed(const Duration(milliseconds: 800));
+                
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              }
+              // Note: _isLoading will be reset when the popup closes
             } catch (e) {
+              // Re-throw to let the button handler reset loading state
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Erreur: ${e.toString()}')),
+                  SnackBar(
+                    content: Text('Erreur: ${e.toString().replaceFirst('Exception: ', '')}'),
+                    backgroundColor: Colors.red,
+                    duration: const Duration(seconds: 3),
+                  ),
                 );
               }
+              rethrow; // Re-throw so the button handler can reset _isLoading
             }
           },
         ),
@@ -345,7 +375,7 @@ class _BookingSheet extends StatefulWidget {
   final Function(DateTime) onStartDateSelected;
   final Function(DateTime) onEndDateSelected;
   final Function(int) onGuestsChanged;
-  final VoidCallback onBook;
+  final Future<void> Function() onBook;
 
   const _BookingSheet({
     required this.property,
@@ -366,6 +396,7 @@ class _BookingSheet extends StatefulWidget {
 class _BookingSheetState extends State<_BookingSheet> {
   late DateTime _focusedDay;
   late TextEditingController _localMessageController;
+  bool _isLoading = false;
 
   // Helper pour normaliser les dates (sans heure)
   DateTime _normalizeDate(DateTime date) {
@@ -442,7 +473,11 @@ class _BookingSheetState extends State<_BookingSheet> {
           const SizedBox(height: 24),
           SizedBox(
             height: 350,
-            child: TableCalendar(
+            child: AbsorbPointer(
+              absorbing: _isLoading,
+              child: Opacity(
+                opacity: _isLoading ? 0.5 : 1.0,
+                child: TableCalendar(
               key: ValueKey('${widget.startDate}_${widget.endDate}'),
               firstDay: DateTime.now(),
               lastDay: DateTime.now().add(const Duration(days: 365)),
@@ -524,34 +559,47 @@ class _BookingSheetState extends State<_BookingSheet> {
               calendarFormat: CalendarFormat.month,
               startingDayOfWeek: StartingDayOfWeek.monday,
               headerStyle: const HeaderStyle(formatButtonVisible: false),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 24),
-          Row(
-            children: [
-              const Text('Nombre de voyageurs: '),
-              IconButton(
-                icon: const Icon(FontAwesomeIcons.circleMinus),
-                onPressed: widget.guests > 1 ? () => widget.onGuestsChanged(widget.guests - 1) : null,
+          AbsorbPointer(
+            absorbing: _isLoading,
+            child: Opacity(
+              opacity: _isLoading ? 0.5 : 1.0,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Text('Nombre de voyageurs: '),
+                      IconButton(
+                        icon: const Icon(FontAwesomeIcons.circleMinus),
+                        onPressed: widget.guests > 1 ? () => widget.onGuestsChanged(widget.guests - 1) : null,
+                      ),
+                      Text('${widget.guests}'),
+                      IconButton(
+                        icon: const Icon(FontAwesomeIcons.circlePlus),
+                        onPressed: () => widget.onGuestsChanged(widget.guests + 1),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _localMessageController,
+                    enabled: !_isLoading,
+                    decoration: const InputDecoration(
+                      labelText: 'Message (optionnel)',
+                      border: OutlineInputBorder(),
+                      hintText: 'Ajoutez un message pour le propriétaire...',
+                    ),
+                    maxLines: 3,
+                    textInputAction: TextInputAction.done,
+                    keyboardType: TextInputType.multiline,
+                  ),
+                ],
               ),
-              Text('${widget.guests}'),
-              IconButton(
-                icon: const Icon(FontAwesomeIcons.circlePlus),
-                onPressed: () => widget.onGuestsChanged(widget.guests + 1),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _localMessageController,
-            decoration: const InputDecoration(
-              labelText: 'Message (optionnel)',
-              border: OutlineInputBorder(),
-              hintText: 'Ajoutez un message pour le propriétaire...',
             ),
-            maxLines: 3,
-            textInputAction: TextInputAction.done,
-            keyboardType: TextInputType.multiline,
           ),
           const SizedBox(height: 24),
           if (nights > 0) ...[
@@ -586,12 +634,41 @@ class _BookingSheetState extends State<_BookingSheet> {
           ],
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: widget.startDate != null && widget.endDate != null ? widget.onBook : null,
+            onPressed: (_isLoading || widget.startDate == null || widget.endDate == null)
+                ? null
+                : () async {
+                    setState(() {
+                      _isLoading = true;
+                    });
+
+                    try {
+                      await widget.onBook();
+                      // Le feedback et la fermeture sont gérés dans onBook
+                      // Si succès, le popup se ferme donc pas besoin de réinitialiser _isLoading
+                    } catch (e) {
+                      // En cas d'erreur, réinitialiser le loading pour permettre une nouvelle tentative
+                      if (mounted) {
+                        setState(() {
+                          _isLoading = false;
+                        });
+                      }
+                      // L'erreur est déjà gérée dans onBook
+                    }
+                  },
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               minimumSize: const Size(double.infinity, 50),
             ),
-            child: const Text('Envoyer la demande'),
+            child: _isLoading
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Envoyer la demande'),
           ),
               ],
             ),

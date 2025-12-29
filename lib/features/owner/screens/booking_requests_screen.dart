@@ -565,7 +565,19 @@ class _BookingRequestCard extends ConsumerWidget {
 
                     // If conversation doesn't exist, create it
                     if (conversation.id.isEmpty) {
-                      conversation = await ref.read(chatProvider.notifier).createConversation(booking.id);
+                      final createdConversation = await ref.read(chatProvider.notifier).createConversation(booking.id);
+                      if (createdConversation == null) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Erreur lors de la création de la conversation'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                        return;
+                      }
+                      conversation = createdConversation;
                     }
 
                     if (context.mounted) {

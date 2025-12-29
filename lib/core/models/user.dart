@@ -50,6 +50,17 @@ class User extends Equatable {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
+    // Handle created_at - might be missing in relation queries (e.g., conversations)
+    DateTime createdAt;
+    if (json['created_at'] != null) {
+      createdAt = DateTime.parse(json['created_at'] as String);
+    } else if (json['createdAt'] != null) {
+      createdAt = DateTime.parse(json['createdAt'] as String);
+    } else {
+      // Default to now if not provided (for relation queries that don't include it)
+      createdAt = DateTime.now();
+    }
+
     return User(
       id: json['id'] as String,
       fullName: json['full_name'] as String? ?? json['fullName'] as String,
@@ -59,7 +70,7 @@ class User extends Equatable {
           ? UserRoleExtension.fromString(json['role'] as String)
           : UserRole.client,
       isVerified: json['is_verified'] as bool? ?? json['isVerified'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String? ?? json['createdAt'] as String),
+      createdAt: createdAt,
       updatedAt: json['updated_at'] != null || json['updatedAt'] != null
           ? DateTime.parse(json['updated_at'] as String? ?? json['updatedAt'] as String)
           : null,
