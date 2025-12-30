@@ -66,9 +66,20 @@ class ChatService extends ApiService {
 
       if (conversationsData != null) {
         print('[ChatService] Found ${conversationsData.length} conversations');
-        return conversationsData
-            .map((item) => Conversation.fromJson(item as Map<String, dynamic>))
+        final conversations = conversationsData
+            .map((item) {
+              try {
+                final conv = Conversation.fromJson(item as Map<String, dynamic>);
+                print('[ChatService] Parsed conversation ${conv.id}: client=${conv.client != null}, owner=${conv.owner != null}');
+                return conv;
+              } catch (e) {
+                print('[ChatService] Error parsing conversation: $e');
+                print('[ChatService] Conversation data: $item');
+                rethrow;
+              }
+            })
             .toList();
+        return conversations;
       } else {
         print('[ChatService] No conversations found in response data');
       }
@@ -134,35 +145,62 @@ class ChatService extends ApiService {
     int limit = 50,
   }) async {
     final queryParams = <String, dynamic>{
+      'conversation_id': conversationId,
       'page': page,
       'limit': limit,
     };
 
+    print('[ChatService] Fetching messages for conversation: $conversationId, page: $page, limit: $limit');
+
     final response = await get<Map<String, dynamic>>(
-      ApiConfig.conversationMessagesEndpoint(conversationId),
+      ApiConfig.messagesEndpoint,
       queryParameters: queryParams,
       parser: (data) => data as Map<String, dynamic>,
     );
 
-    final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+    print('[ChatService] API response received: ${response.toString().substring(0, response.toString().length > 200 ? 200 : response.toString().length)}...');
+
+    final apiResponse = ApiResponse<List<dynamic>>.fromJson(
       response,
-      (data) => data,
+      (data) => data as List<dynamic>,
     );
 
+    print('[ChatService] Parsed API response - success: ${apiResponse.success}, data type: ${apiResponse.data.runtimeType}, data length: ${apiResponse.data?.length ?? 0}');
+
     if (apiResponse.data != null) {
-      final messagesData = apiResponse.data!['messages'] as List<dynamic>?;
-      if (messagesData != null) {
+      // Backend returns messages directly in data array (not in data.messages)
+      final messagesData = apiResponse.data!;
+      print('[ChatService] Messages data length: ${messagesData.length}');
+      
+      if (messagesData.isNotEmpty) {
         final messages = messagesData
-            .map((item) => Message.fromJson(item as Map<String, dynamic>))
+            .map((item) {
+              try {
+                return Message.fromJson(item as Map<String, dynamic>);
+              } catch (e) {
+                print('[ChatService] Error parsing message: $e, item: $item');
+                rethrow;
+              }
+            })
             .toList();
+        
+        print('[ChatService] Successfully parsed ${messages.length} messages');
         
         return MessageListResponse(
           messages: messages,
           pagination: apiResponse.pagination,
         );
+      } else {
+        // Empty array - no messages yet
+        print('[ChatService] No messages found (empty array)');
+        return MessageListResponse(
+          messages: [],
+          pagination: apiResponse.pagination,
+        );
       }
     }
 
+    print('[ChatService] Error: ${apiResponse.error?.message ?? 'Unknown error'}');
     throw Exception(apiResponse.error?.message ?? 'Impossible de récupérer les messages');
   }
 
@@ -172,6 +210,8 @@ class ChatService extends ApiService {
     required String filePath,
     required String fileName,
   }) async {
+    print('[ChatService] Starting file upload - conversationId: $conversationId, filePath: $filePath, fileName: $fileName');
+    
     final token = await TokenManager.getToken();
     if (token == null) {
       throw Exception('Vous devez être connecté pour envoyer un fichier');
@@ -182,11 +222,14 @@ class ChatService extends ApiService {
       filename: fileName,
     );
 
+    print('[ChatService] File created - size: ${file.length}, filename: ${file.filename}');
+
     final formData = FormData.fromMap({
       'file': file,
     });
 
     try {
+      print('[ChatService] Uploading to: ${ApiConfig.conversationUploadFileEndpoint(conversationId)}');
       final response = await dio.post(
         ApiConfig.conversationUploadFileEndpoint(conversationId),
         data: formData,
@@ -198,22 +241,32 @@ class ChatService extends ApiService {
         ),
       );
 
+      print('[ChatService] Upload response received: ${response.statusCode}');
+      print('[ChatService] Upload response data: ${response.data}');
+
       final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
         response.data as Map<String, dynamic>,
         (data) => data,
       );
 
       if (apiResponse.data != null) {
-        return {
-          'file_url': apiResponse.data!['file_url'] as String,
-          'file_name': apiResponse.data!['file_name'] as String,
-          'file_size': apiResponse.data!['file_size'] as int,
+        final result = {
+          'file_url': apiResponse.data!['file_url'] as String?,
+          'file_name': apiResponse.data!['file_name'] as String?,
+          'file_size': apiResponse.data!['file_size'] as int?,
         };
+        print('[ChatService] Upload successful - result: $result');
+        return result;
       }
 
+      print('[ChatService] Upload failed - no data in response, error: ${apiResponse.error?.message}');
       throw Exception(apiResponse.error?.message ?? 'Erreur lors du téléchargement du fichier');
     } on DioException catch (e) {
+      print('[ChatService] Upload DioException: ${e.type}, message: ${e.message}, response: ${e.response?.data}');
       throw Exception(ApiErrorHandler.getErrorMessage(e));
+    } catch (e) {
+      print('[ChatService] Upload error: $e');
+      rethrow;
     }
   }
 
@@ -225,30 +278,48 @@ class ChatService extends ApiService {
     String? fileName,
     int? fileSize,
   }) async {
-    final response = await post<Map<String, dynamic>>(
-      ApiConfig.conversationMessagesEndpoint(conversationId),
-      data: {
-        'content': content,
-        if (fileUrl != null) 'file_url': fileUrl,
-        if (fileName != null) 'file_name': fileName,
-        if (fileSize != null) 'file_size': fileSize,
-      },
-      parser: (data) => data as Map<String, dynamic>,
-    );
+    final messageData = {
+      'conversation_id': conversationId,
+      'content': content,
+      if (fileUrl != null) 'file_url': fileUrl,
+      if (fileName != null) 'file_name': fileName,
+      if (fileSize != null) 'file_size': fileSize,
+    };
 
-    final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-      response,
-      (data) => data,
-    );
+    print('[ChatService] Sending message with data: $messageData');
 
-    if (apiResponse.data != null) {
-      final messageData = apiResponse.data!['message'] as Map<String, dynamic>?;
-      if (messageData != null) {
-        return Message.fromJson(messageData);
+    try {
+      final response = await post<Map<String, dynamic>>(
+        ApiConfig.messagesEndpoint,
+        data: messageData,
+        parser: (data) => data as Map<String, dynamic>,
+      );
+
+      print('[ChatService] Message sent successfully - response: $response');
+
+      final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+        response,
+        (data) => data,
+      );
+
+      if (apiResponse.data != null) {
+        final messageData = apiResponse.data!['message'] as Map<String, dynamic>?;
+        if (messageData != null) {
+          return Message.fromJson(messageData);
+        }
       }
-    }
 
-    throw Exception(apiResponse.error?.message ?? 'Erreur lors de l\'envoi du message');
+      print('[ChatService] Message send failed - error: ${apiResponse.error?.message}, code: ${apiResponse.error?.code}');
+      throw Exception(apiResponse.error?.message ?? 'Erreur lors de l\'envoi du message');
+    } on DioException catch (e) {
+      print('[ChatService] Message send DioException: ${e.type}, message: ${e.message}');
+      print('[ChatService] Response data: ${e.response?.data}');
+      print('[ChatService] Response status: ${e.response?.statusCode}');
+      throw Exception(ApiErrorHandler.getErrorMessage(e));
+    } catch (e) {
+      print('[ChatService] Message send error: $e');
+      rethrow;
+    }
   }
 
   /// Mark a message as read

@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart'; // For MissingPluginException
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travelci/core/models/conversation.dart';
 import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
@@ -63,6 +66,17 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     return user?.id ?? '';
   }
 
+  String _getConversationTitle() {
+    final propertyTitle = widget.conversation.propertyTitle ?? 'Appartement';
+    // Use conversation createdAt as the booking request date (date de demande)
+    final requestDate = DateFormat('dd/MM/yyyy').format(widget.conversation.createdAt);
+    // Include booking ID (first 8 characters) to make it unique
+    final bookingIdShort = widget.conversation.bookingId.length > 8 
+        ? widget.conversation.bookingId.substring(0, 8) 
+        : widget.conversation.bookingId;
+    return '$propertyTitle le $requestDate - Res. $bookingIdShort';
+  }
+
   String _formatMessageTime(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
@@ -84,6 +98,51 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     } else {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     }
+  }
+
+  bool _isImageFile(String? fileName) {
+    if (fileName == null) return false;
+    final extension = fileName.toLowerCase().split('.').last;
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(extension);
+  }
+
+  void _previewImage(BuildContext context, String imageUrl, String? fileName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            iconTheme: const IconThemeData(color: Colors.white),
+            title: Text(
+              fileName ?? 'Image',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.contain,
+                placeholder: (context, url) => const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+                errorWidget: (context, url, error) => const Center(
+                  child: Icon(
+                    Icons.error,
+                    color: Colors.white,
+                    size: 48,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   IconData _getFileIcon(String fileName) {
@@ -120,16 +179,104 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
 
   Future<void> _pickFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        allowMultiple: false,
-      );
+      // Ensure we're on a supported platform
+      if (kIsWeb) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('La sélection de fichiers depuis le navigateur n\'est pas encore supportée'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
 
-      if (result != null && result.files.single.path != null) {
-        setState(() {
-          _selectedFilePath = result.files.single.path;
-          _selectedFileName = result.files.single.name;
-        });
+      // Use FilePicker with proper error handling
+      FilePickerResult? result;
+      
+      try {
+        // Add a small delay to ensure plugin is initialized
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.any,
+          allowMultiple: false,
+        );
+      } on MissingPluginException catch (e) {
+        // Handle MissingPluginException specifically
+        print('[ChatDetailScreen] FilePicker MissingPluginException: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Le plugin de sélection de fichiers n\'est pas initialisé. Veuillez arrêter complètement l\'application et la redémarrer (pas juste un hot reload).',
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      } on PlatformException catch (e) {
+        // Handle platform-specific exceptions
+        print('[ChatDetailScreen] FilePicker PlatformException: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur de plateforme: ${e.message ?? e.toString()}'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      } on Exception catch (e) {
+        // Handle other exceptions
+        print('[ChatDetailScreen] FilePicker exception: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur lors de l\'ouverture du sélecteur de fichiers: ${e.toString()}'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      } catch (e) {
+        // Handle any other errors including LateInitializationError
+        print('[ChatDetailScreen] FilePicker error: $e');
+        print('[ChatDetailScreen] Error type: ${e.runtimeType}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur d\'initialisation du sélecteur de fichiers. Veuillez redémarrer l\'application et réessayer.'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        
+        // Check if we have a file path (mobile platforms)
+        if (file.path != null && file.path!.isNotEmpty) {
+          setState(() {
+            _selectedFilePath = file.path;
+            _selectedFileName = file.name;
+          });
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Impossible d\'obtenir le chemin du fichier sélectionné'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -140,6 +287,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           ),
         );
       }
+      // Log the error for debugging
+      print('[ChatDetailScreen] File picker error: $e');
+      print('[ChatDetailScreen] Error type: ${e.runtimeType}');
     }
   }
 
@@ -157,6 +307,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
 
     // Upload file if selected
     if (_selectedFilePath != null) {
+      print('[ChatDetailScreen] Starting file upload: ${_selectedFilePath}, name: ${_selectedFileName}');
       setState(() {
         _isUploadingFile = true;
       });
@@ -169,9 +320,16 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           fileName: _selectedFileName ?? 'file',
         );
 
-        fileUrl = fileInfo['file_url'] as String;
-        fileName = fileInfo['file_name'] as String;
-        fileSize = fileInfo['file_size'] as int;
+        print('[ChatDetailScreen] File upload successful: $fileInfo');
+        fileUrl = fileInfo['file_url'] as String?;
+        fileName = fileInfo['file_name'] as String?;
+        fileSize = fileInfo['file_size'] as int?;
+
+        print('[ChatDetailScreen] Extracted file info - url: $fileUrl, name: $fileName, size: $fileSize');
+
+        if (fileUrl == null || fileName == null) {
+          throw Exception('Les informations du fichier sont incomplètes après l\'upload');
+        }
 
         setState(() {
           _selectedFilePath = null;
@@ -179,6 +337,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           _isUploadingFile = false;
         });
       } catch (e) {
+        print('[ChatDetailScreen] File upload error: $e');
         setState(() {
           _isUploadingFile = false;
           _isSending = false;
@@ -198,6 +357,8 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     final messageContent = content.isEmpty && fileUrl != null 
         ? fileName ?? 'Fichier joint' 
         : content;
+
+    print('[ChatDetailScreen] Sending message - content: "$messageContent", hasFile: ${fileUrl != null}, fileUrl: $fileUrl, fileName: $fileName, fileSize: $fileSize');
 
     _messageController.clear();
 
@@ -258,7 +419,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.conversation.propertyTitle ?? 'Réservation',
+              _getConversationTitle(),
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -380,72 +541,175 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                               children: [
                                 // File attachment
                                 if (message.fileUrl != null) ...[
-                                  GestureDetector(
-                                    onTap: () async {
-                                      try {
-                                        await OpenFilex.open(message.fileUrl!);
-                                      } catch (e) {
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Impossible d\'ouvrir le fichier: ${e.toString()}'),
-                                              backgroundColor: Colors.red,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: isMe 
-                                            ? Colors.white.withOpacity(0.2)
-                                            : Colors.grey[200],
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            _getFileIcon(message.fileName ?? 'file'),
-                                            color: isMe ? Colors.white : Colors.blue,
-                                            size: 24,
+                                  if (_isImageFile(message.fileName))
+                                    // Image preview
+                                    GestureDetector(
+                                      onTap: () {
+                                        _previewImage(context, message.fileUrl!, message.fileName);
+                                      },
+                                      child: Container(
+                                        constraints: const BoxConstraints(
+                                          maxHeight: 300,
+                                          maxWidth: 250,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: isMe 
+                                                ? Colors.white.withOpacity(0.3)
+                                                : Colors.grey[400]!,
+                                            width: 1,
                                           ),
-                                          const SizedBox(width: 8),
-                                          Flexible(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  message.fileName ?? 'Fichier',
-                                                  style: TextStyle(
-                                                    color: isMe ? Colors.white : Colors.black87,
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.bold,
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Stack(
+                                            children: [
+                                              CachedNetworkImage(
+                                                imageUrl: message.fileUrl!,
+                                                fit: BoxFit.cover,
+                                                width: double.infinity,
+                                                placeholder: (context, url) => Container(
+                                                  height: 200,
+                                                  color: Colors.grey[300],
+                                                  child: const Center(
+                                                    child: CircularProgressIndicator(),
                                                   ),
-                                                  overflow: TextOverflow.ellipsis,
                                                 ),
-                                                if (message.fileSize != null)
-                                                  Text(
-                                                    _formatFileSize(message.fileSize!),
-                                                    style: TextStyle(
-                                                      color: isMe ? Colors.white70 : Colors.black54,
-                                                      fontSize: 12,
+                                                errorWidget: (context, url, error) => Container(
+                                                  height: 200,
+                                                  color: Colors.grey[300],
+                                                  child: const Center(
+                                                    child: Icon(Icons.error),
+                                                  ),
+                                                ),
+                                              ),
+                                              // Overlay with file info
+                                              Positioned(
+                                                bottom: 0,
+                                                left: 0,
+                                                right: 0,
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(8),
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      begin: Alignment.topCenter,
+                                                      end: Alignment.bottomCenter,
+                                                      colors: [
+                                                        Colors.transparent,
+                                                        Colors.black.withOpacity(0.7),
+                                                      ],
                                                     ),
                                                   ),
-                                              ],
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Text(
+                                                              message.fileName ?? 'Image',
+                                                              style: const TextStyle(
+                                                                color: Colors.white,
+                                                                fontSize: 12,
+                                                                fontWeight: FontWeight.bold,
+                                                              ),
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                            if (message.fileSize != null)
+                                                              Text(
+                                                                _formatFileSize(message.fileSize!),
+                                                                style: TextStyle(
+                                                                  color: Colors.white70,
+                                                                  fontSize: 10,
+                                                                ),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      const Icon(
+                                                        FontAwesomeIcons.expand,
+                                                        color: Colors.white,
+                                                        size: 14,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    // Non-image file
+                                    GestureDetector(
+                                      onTap: () async {
+                                        try {
+                                          await OpenFilex.open(message.fileUrl!);
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Impossible d\'ouvrir le fichier: ${e.toString()}'),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: isMe 
+                                              ? Colors.white.withOpacity(0.2)
+                                              : Colors.grey[200],
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              _getFileIcon(message.fileName ?? 'file'),
+                                              color: isMe ? Colors.white : Colors.blue,
+                                              size: 24,
                                             ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Icon(
-                                            FontAwesomeIcons.download,
-                                            color: isMe ? Colors.white70 : Colors.black54,
-                                            size: 16,
-                                          ),
-                                        ],
+                                            const SizedBox(width: 8),
+                                            Flexible(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    message.fileName ?? 'Fichier',
+                                                    style: TextStyle(
+                                                      color: isMe ? Colors.white : Colors.black87,
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  if (message.fileSize != null)
+                                                    Text(
+                                                      _formatFileSize(message.fileSize!),
+                                                      style: TextStyle(
+                                                        color: isMe ? Colors.white70 : Colors.black54,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Icon(
+                                              FontAwesomeIcons.download,
+                                              color: isMe ? Colors.white70 : Colors.black54,
+                                              size: 16,
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
                                   if (message.content.isNotEmpty) const SizedBox(height: 8),
                                 ],
                                 // Message content
