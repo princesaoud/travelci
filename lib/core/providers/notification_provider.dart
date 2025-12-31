@@ -264,6 +264,39 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
 
     await addNotification(notification);
   }
+
+  /// Create notification for new message
+  Future<void> notifyNewMessage({
+    required String messageId,
+    required String conversationId,
+    required String senderName,
+    required String messageContent,
+    String? propertyTitle,
+    String? bookingId,
+  }) async {
+    // Truncate message content if too long
+    final truncatedContent = messageContent.length > 50
+        ? '${messageContent.substring(0, 50)}...'
+        : messageContent;
+
+    final notification = app.AppNotification(
+      id: 'message_$messageId',
+      type: app.NotificationType.message,
+      title: propertyTitle != null
+          ? 'Nouveau message - $propertyTitle'
+          : 'Nouveau message',
+      message: '$senderName: $truncatedContent',
+      createdAt: DateTime.now(),
+      data: {
+        'messageId': messageId,
+        'conversationId': conversationId,
+        'type': 'message',
+        if (bookingId != null) 'bookingId': bookingId,
+      },
+    );
+
+    await addNotification(notification);
+  }
 }
 
 // Providers

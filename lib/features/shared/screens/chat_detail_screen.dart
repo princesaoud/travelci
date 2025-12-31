@@ -43,6 +43,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     
+    // Set this conversation as active
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(chatProvider.notifier).setActiveConversation(widget.conversation.id);
+    });
+
     // Load messages when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadMessages();
@@ -62,6 +67,8 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _messagePollingTimer?.cancel();
+    // Clear active conversation when leaving
+    ref.read(chatProvider.notifier).setActiveConversation(null);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();

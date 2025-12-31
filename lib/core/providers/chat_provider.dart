@@ -3,6 +3,8 @@ import 'package:travelci/core/models/api_response.dart';
 import 'package:travelci/core/models/conversation.dart';
 import 'package:travelci/core/models/message.dart';
 import 'package:travelci/core/services/chat_service.dart';
+import 'package:travelci/core/providers/notification_provider.dart';
+import 'package:travelci/core/providers/auth_provider.dart';
 
 class ChatState {
   final List<Conversation> conversations;
@@ -10,6 +12,7 @@ class ChatState {
   final bool isLoading;
   final String? error;
   final Map<String, PaginationInfo?> pagination; // conversationId -> pagination
+  final String? activeConversationId; // Currently open conversation ID
 
   const ChatState({
     this.conversations = const [],
@@ -17,6 +20,7 @@ class ChatState {
     this.isLoading = false,
     this.error,
     this.pagination = const {},
+    this.activeConversationId,
   });
 
   ChatState copyWith({
@@ -25,6 +29,7 @@ class ChatState {
     bool? isLoading,
     String? error,
     Map<String, PaginationInfo?>? pagination,
+    String? activeConversationId,
   }) {
     return ChatState(
       conversations: conversations ?? this.conversations,
@@ -32,6 +37,7 @@ class ChatState {
       isLoading: isLoading ?? this.isLoading,
       error: error,
       pagination: pagination ?? this.pagination,
+      activeConversationId: activeConversationId ?? this.activeConversationId,
     );
   }
 
@@ -48,8 +54,10 @@ class ChatState {
 
 class ChatNotifier extends StateNotifier<ChatState> {
   final ChatService _chatService;
+  final Ref _ref;
+  final Set<String> _notifiedMessageIds = {}; // Track already notified messages
 
-  ChatNotifier(this._chatService) : super(ChatState()) {
+  ChatNotifier(this._chatService, this._ref) : super(ChatState()) {
     // Optionally load conversations on init
   }
 
@@ -64,8 +72,23 @@ class ChatNotifier extends StateNotifier<ChatState> {
       if (conversations.isNotEmpty) {
         print('[ChatProvider] First conversation: ${conversations.first.id}, client_id: ${conversations.first.clientId}, owner_id: ${conversations.first.ownerId}');
       }
+      
+      // Sort conversations by lastMessageAt descending (most recent first)
+      final sortedConversations = List<Conversation>.from(conversations);
+      sortedConversations.sort((a, b) {
+        final aTime = a.lastMessageAt ?? a.createdAt;
+        final bTime = b.lastMessageAt ?? b.createdAt;
+        return bTime.compareTo(aTime);
+      });
+      
+      // Debug: Log conversation details
+      print('[ChatProvider] Final conversations count: ${sortedConversations.length}');
+      for (var conv in sortedConversations) {
+        print('[ChatProvider] Conversation ${conv.id}: client=${conv.client != null ? conv.client!.fullName : "null"}, owner=${conv.owner != null ? conv.owner!.fullName : "null"}');
+      }
+      
       state = state.copyWith(
-        conversations: conversations,
+        conversations: sortedConversations,
         isLoading: false,
         error: null,
       );
@@ -76,6 +99,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
         error: e.toString().replaceFirst('Exception: ', ''),
       );
     }
+  }
+
+  /// Set active conversation (currently open)
+  void setActiveConversation(String? conversationId) {
+    state = state.copyWith(activeConversationId: conversationId);
   }
 
   /// Load messages for a conversation
@@ -98,6 +126,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final updatedMessages = Map<String, List<Message>>.from(state.messages);
       final updatedPagination = Map<String, PaginationInfo?>.from(state.pagination);
 
+      // Track previous message IDs to detect new ones
+      final previousMessageIds = currentMessages.map((m) => m.id).toSet();
+
       if (loadMore) {
         // Append messages for pagination
         updatedMessages[conversationId] = [
@@ -107,6 +138,23 @@ class ChatNotifier extends StateNotifier<ChatState> {
       } else {
         // Replace messages (new load)
         updatedMessages[conversationId] = response.messages;
+        
+        // Detect new messages and send notifications
+        final currentUserId = _ref.read(authProvider).user?.id;
+        if (currentUserId != null) {
+          final newMessages = response.messages.where((msg) {
+            // Only notify for messages not sent by current user
+            // and that weren't in the previous list
+            return msg.senderId != currentUserId &&
+                   !previousMessageIds.contains(msg.id) &&
+                   msg.messageType != 'system';
+          }).toList();
+
+          // Send notifications for new messages
+          if (newMessages.isNotEmpty) {
+            _notifyNewMessages(conversationId, newMessages, currentUserId);
+          }
+        }
       }
 
       updatedPagination[conversationId] = response.pagination;
@@ -119,6 +167,75 @@ class ChatNotifier extends StateNotifier<ChatState> {
       state = state.copyWith(
         error: e.toString().replaceFirst('Exception: ', ''),
       );
+    }
+  }
+
+  /// Notify about new messages
+  Future<void> _notifyNewMessages(
+    String conversationId,
+    List<Message> newMessages,
+    String currentUserId,
+  ) async {
+    // Don't notify if user is currently viewing this conversation
+    if (state.activeConversationId == conversationId) {
+      return;
+    }
+
+    // Find conversation details
+    final conversation = state.conversations.firstWhere(
+      (conv) => conv.id == conversationId,
+      orElse: () => Conversation(
+        id: conversationId,
+        bookingId: '',
+        clientId: '',
+        ownerId: '',
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    // Get notification provider
+    final notificationNotifier = _ref.read(notificationProvider.notifier);
+
+    // Filter messages: only notify for messages created in the last 5 minutes
+    // This prevents notifying old messages when opening a conversation for the first time
+    final now = DateTime.now();
+    final recentMessages = newMessages.where((message) {
+      final messageAge = now.difference(message.createdAt);
+      return messageAge.inMinutes < 5; // Only messages from last 5 minutes
+    }).toList();
+
+    // Notify for each new message (only once per message)
+    for (final message in recentMessages) {
+      if (_notifiedMessageIds.contains(message.id)) {
+        continue; // Already notified
+      }
+
+      // Get sender name
+      final senderName = message.sender?.fullName ?? 'Utilisateur';
+      
+      // Get property title from conversation
+      final propertyTitle = conversation.propertyTitle;
+
+      // Send notification
+      await notificationNotifier.notifyNewMessage(
+        messageId: message.id,
+        conversationId: conversationId,
+        senderName: senderName,
+        messageContent: message.content,
+        propertyTitle: propertyTitle,
+        bookingId: conversation.bookingId,
+      );
+
+      // Mark as notified
+      _notifiedMessageIds.add(message.id);
+    }
+
+    // Clean up old notified message IDs (keep only last 100)
+    if (_notifiedMessageIds.length > 100) {
+      final idsToRemove = _notifiedMessageIds.take(_notifiedMessageIds.length - 100).toList();
+      for (final id in idsToRemove) {
+        _notifiedMessageIds.remove(id);
+      }
     }
   }
 
@@ -146,7 +263,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
       state = state.copyWith(messages: updatedMessages);
 
-      // Update conversation's last message
+      // Update conversation's last message and sort by lastMessageAt
       final updatedConversations = state.conversations.map((conv) {
         if (conv.id == conversationId) {
           return conv.copyWith(
@@ -156,6 +273,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
         }
         return conv;
       }).toList();
+
+      // Sort conversations by lastMessageAt descending (most recent first)
+      updatedConversations.sort((a, b) {
+        final aTime = a.lastMessageAt ?? a.createdAt;
+        final bTime = b.lastMessageAt ?? b.createdAt;
+        return bTime.compareTo(aTime);
+      });
 
       state = state.copyWith(conversations: updatedConversations);
 
@@ -229,7 +353,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       
       state = state.copyWith(messages: updatedMessages);
 
-      // Update conversation's last message
+      // Update conversation's last message and sort by lastMessageAt
       final updatedConversations = state.conversations.map((conv) {
         if (conv.id == conversationId) {
           return conv.copyWith(
@@ -239,6 +363,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
         }
         return conv;
       }).toList();
+
+      // Sort conversations by lastMessageAt descending (most recent first)
+      updatedConversations.sort((a, b) {
+        final aTime = a.lastMessageAt ?? a.createdAt;
+        final bTime = b.lastMessageAt ?? b.createdAt;
+        return bTime.compareTo(aTime);
+      });
 
       state = state.copyWith(conversations: updatedConversations);
     }
@@ -253,6 +384,6 @@ final chatServiceProvider = Provider<ChatService>((ref) {
 // Provider for ChatNotifier
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
   final chatService = ref.watch(chatServiceProvider);
-  return ChatNotifier(chatService);
+  return ChatNotifier(chatService, ref);
 });
 
