@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -26,31 +27,101 @@ class ChatDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<ChatDetailScreen> createState() => _ChatDetailScreenState();
 }
 
-class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
+class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isSending = false;
   bool _isUploadingFile = false;
   String? _selectedFilePath;
   String? _selectedFileName;
+  Timer? _messagePollingTimer;
+  bool _isScreenActive = true;
+  int _previousMessageCount = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     
     // Load messages when screen opens
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(chatProvider.notifier).loadMessages(
-        conversationId: widget.conversation.id,
-      );
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadMessages();
+      // Initialize message count after first load
+      if (mounted) {
+        final chatState = ref.read(chatProvider);
+        final messages = chatState.getMessagesForConversation(widget.conversation.id);
+        _previousMessageCount = messages.length;
+      }
     });
+
+    // Start polling for new messages every 3 seconds
+    _startMessagePolling();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _messagePollingTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Pause polling when app goes to background, resume when it comes back
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _isScreenActive = false;
+      _messagePollingTimer?.cancel();
+    } else if (state == AppLifecycleState.resumed) {
+      _isScreenActive = true;
+      _loadMessages(); // Immediately load messages when app resumes
+      _startMessagePolling();
+    }
+  }
+
+  void _loadMessages() async {
+    if (!mounted) return;
+    await ref.read(chatProvider.notifier).loadMessages(
+      conversationId: widget.conversation.id,
+    );
+    
+    // Check if new messages arrived and auto-scroll if user is near bottom
+    if (mounted) {
+      final chatState = ref.read(chatProvider);
+      final currentMessages = chatState.getMessagesForConversation(widget.conversation.id);
+      final currentMessageCount = currentMessages.length;
+      
+      // If new messages arrived and user is near bottom, scroll to bottom
+      if (currentMessageCount > _previousMessageCount && _scrollController.hasClients) {
+        final maxScroll = _scrollController.position.maxScrollExtent;
+        final currentScroll = _scrollController.position.pixels;
+        // If user is within 100px of bottom, auto-scroll
+        if (maxScroll - currentScroll < 100) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+        }
+      }
+      
+      _previousMessageCount = currentMessageCount;
+    }
+  }
+
+  void _startMessagePolling() {
+    _messagePollingTimer?.cancel();
+    _messagePollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (_isScreenActive && mounted && !_isSending && !_isUploadingFile) {
+        _loadMessages();
+      }
+    });
   }
 
   User? _getOtherUser(User currentUser) {
@@ -370,6 +441,13 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
         fileName: fileName,
         fileSize: fileSize,
       );
+
+      // Update message count after sending
+      if (mounted) {
+        final chatState = ref.read(chatProvider);
+        final messages = chatState.getMessagesForConversation(widget.conversation.id);
+        _previousMessageCount = messages.length;
+      }
 
       // Scroll to bottom
       if (_scrollController.hasClients) {
