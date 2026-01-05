@@ -20,6 +20,17 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  String _getConversationTitle(Conversation conversation) {
+    final propertyTitle = conversation.propertyTitle ?? 'Reservation';
+    // Use conversation createdAt as the booking request date (date de demande)
+    final requestDate = DateFormat('dd/MM/yyyy').format(conversation.createdAt);
+    // Include booking ID (first 8 characters) to make it unique
+    final bookingIdShort = conversation.bookingId.length > 8 
+        ? conversation.bookingId.substring(0, 8) 
+        : conversation.bookingId;
+    return '$propertyTitle le $requestDate - Res. $bookingIdShort';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -116,6 +127,11 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
     }
 
     final conversations = _filterConversations(chatState.conversations);
+    
+    // Debug log
+    print('[ConversationsList] Total conversations in state: ${chatState.conversations.length}');
+    print('[ConversationsList] Filtered conversations: ${conversations.length}');
+    print('[ConversationsList] Search query: "$_searchQuery"');
 
     return Scaffold(
       appBar: AppBar(
@@ -200,7 +216,90 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
                               final otherUser = _getOtherUser(conversation, user);
 
                               if (otherUser == null) {
-                                return const SizedBox.shrink();
+                                // Log for debugging
+                                print('[ConversationsList] Conversation ${conversation.id} has null otherUser. client=${conversation.client != null}, owner=${conversation.owner != null}, userRole=${user.role.value}');
+                                // Show conversation anyway with fallback display
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  child: ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor: Theme.of(context).colorScheme.primary,
+                                      child: const Icon(Icons.person, color: Colors.white),
+                                    ),
+                                    title: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _getConversationTitle(conversation),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                            color: Theme.of(context).colorScheme.primary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Utilisateur inconnu',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    subtitle: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          conversation.lastMessage?.content ?? 'Aucun message',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _formatLastMessageTime(conversation.lastMessageAt),
+                                          style: TextStyle(
+                                            color: Colors.grey[500],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    trailing: conversation.unreadCount != null &&
+                                            conversation.unreadCount! > 0
+                                        ? Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: const BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Text(
+                                              '${conversation.unreadCount}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          )
+                                        : null,
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => ChatDetailScreen(
+                                            conversation: conversation,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
                               }
 
                               return Card(
@@ -217,7 +316,7 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        conversation.propertyTitle ?? 'Réservation',
+                                        _getConversationTitle(conversation),
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 16,

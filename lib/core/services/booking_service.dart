@@ -135,5 +135,31 @@ class BookingService extends ApiService {
 
     throw Exception(apiResponse.error?.message ?? 'Erreur lors de l\'annulation de la réservation');
   }
+
+  /// Get bookings for a specific property
+  /// Returns only accepted and pending bookings (to show unavailable dates)
+  /// This endpoint returns ALL bookings for the property, not just the user's bookings
+  Future<List<Booking>> getPropertyBookings(String propertyId) async {
+    final response = await get<Map<String, dynamic>>(
+      ApiConfig.propertyBookingsEndpoint(propertyId),
+      parser: (data) => data as Map<String, dynamic>,
+    );
+
+    final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+      response,
+      (data) => data,
+    );
+
+    if (apiResponse.data != null) {
+      final bookingsData = apiResponse.data!['bookings'] as List<dynamic>?;
+      if (bookingsData != null) {
+        return bookingsData
+            .map((item) => Booking.fromJson(item as Map<String, dynamic>))
+            .toList();
+      }
+    }
+
+    throw Exception(apiResponse.error?.message ?? 'Impossible de récupérer les réservations de la propriété');
+  }
 }
 

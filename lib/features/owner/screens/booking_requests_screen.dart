@@ -34,6 +34,76 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
     });
   }
 
+  /// Open conversation for a booking (create if doesn't exist)
+  Future<void> _openConversationForBooking(Booking booking) async {
+    try {
+      // First, refresh conversations to get the latest list
+      final user = ref.read(authProvider).user;
+      if (user != null) {
+        await ref.read(chatProvider.notifier).refreshConversations(role: user.role.value);
+      }
+
+      // Try to find existing conversation
+      final conversations = ref.read(chatProvider).conversations;
+      var conversation = conversations.firstWhere(
+        (conv) => conv.bookingId == booking.id,
+        orElse: () => Conversation(
+          id: '',
+          bookingId: booking.id,
+          clientId: booking.clientId,
+          ownerId: '',
+          propertyId: booking.propertyId,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      // If conversation doesn't exist, create it
+      if (conversation.id.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Création de la conversation...'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+
+        final createdConversation = await ref.read(chatProvider.notifier).createConversation(booking.id);
+        if (createdConversation == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Erreur lors de la création de la conversation'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+        conversation = createdConversation;
+      }
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatDetailScreen(conversation: conversation),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _handleAccept(String bookingId) async {
     final reason = await _showReasonDialog(
       context: context,
@@ -287,6 +357,7 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
                   client: client,
                   onAccept: () => _handleAccept(booking.id),
                   onDecline: () => _handleDecline(booking.id),
+                  onOpenChat: (booking) => _openConversationForBooking(booking),
                 );
               },
             ),
@@ -301,6 +372,7 @@ class _BookingRequestCard extends ConsumerWidget {
   final User client;
   final Future<void> Function() onAccept;
   final Future<void> Function() onDecline;
+  final Future<void> Function(Booking) onOpenChat;
 
   const _BookingRequestCard({
     required this.booking,
@@ -308,6 +380,7 @@ class _BookingRequestCard extends ConsumerWidget {
     required this.client,
     required this.onAccept,
     required this.onDecline,
+    required this.onOpenChat,
   });
 
   Color _getStatusColor(BookingStatus status) {
@@ -503,13 +576,8 @@ class _BookingRequestCard extends ConsumerWidget {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        // Navigate to conversations list
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ConversationsListScreen(),
-                          ),
-                        );
+                        // Open conversation for this booking
+                        await onOpenChat(booking);
                       },
                       icon: const Icon(FontAwesomeIcons.comments),
                       label: const Text('Chat'),
@@ -546,58 +614,8 @@ class _BookingRequestCard extends ConsumerWidget {
               const SizedBox(height: 16),
               OutlinedButton.icon(
                 onPressed: () async {
-                  // Try to find or create conversation for this booking
-                  try {
-                    // First, try to get existing conversation
-                    final conversations = ref.read(chatProvider).conversations;
-                    var conversation = conversations.firstWhere(
-                      (conv) => conv.bookingId == booking.id,
-                      orElse: () => Conversation(
-                        id: '',
-                        bookingId: booking.id,
-                        clientId: booking.clientId,
-                        ownerId: '',
-                        propertyId: booking.propertyId,
-                        createdAt: DateTime.now(),
-                        updatedAt: DateTime.now(),
-                      ),
-                    );
-
-                    // If conversation doesn't exist, create it
-                    if (conversation.id.isEmpty) {
-                      final createdConversation = await ref.read(chatProvider.notifier).createConversation(booking.id);
-                      if (createdConversation == null) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Erreur lors de la création de la conversation'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                        return;
-                      }
-                      conversation = createdConversation;
-                    }
-
-                    if (context.mounted) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ChatDetailScreen(conversation: conversation),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Erreur: ${e.toString().replaceFirst('Exception: ', '')}'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
+                  // Open conversation for this booking
+                  await onOpenChat(booking);
                 },
                 icon: const Icon(FontAwesomeIcons.comments),
                 label: const Text('Chatter avec le client'),

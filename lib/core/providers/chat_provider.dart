@@ -190,6 +190,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         clientId: '',
         ownerId: '',
         createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
       ),
     );
 

@@ -88,7 +88,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
     }
   }
 
-  void _loadMessages() async {
+  Future<void> _loadMessages() async {
     if (!mounted) return;
     await ref.read(chatProvider.notifier).loadMessages(
       conversationId: widget.conversation.id,

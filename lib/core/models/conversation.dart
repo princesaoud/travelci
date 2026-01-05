@@ -21,6 +21,7 @@ class Conversation extends Equatable {
   final Message? lastMessage;
   final int? unreadCount;
   final String? propertyTitle; // Title of the property for this conversation
+  final DateTime? bookingStartDate; // Start date of the booking
 
   const Conversation({
     required this.id,
@@ -36,7 +37,63 @@ class Conversation extends Equatable {
     this.lastMessage,
     this.unreadCount,
     this.propertyTitle,
+    this.bookingStartDate,
   });
+
+  static String? _extractPropertyTitle(Map<String, dynamic> json) {
+    // Try property_title first (from backend)
+    if (json['property_title'] != null) {
+      final title = json['property_title'] as String?;
+      print('[Conversation] Found property_title: $title');
+      return title;
+    }
+    
+    // Try to extract from booking.property.title if available
+    if (json['booking'] != null) {
+      final booking = json['booking'] as Map<String, dynamic>?;
+      if (booking != null && booking['property'] != null) {
+        final property = booking['property'];
+        if (property is Map<String, dynamic> && property['title'] != null) {
+          final title = property['title'] as String;
+          print('[Conversation] Found property title from booking.property.title: $title');
+          return title;
+        } else if (property is List && property.isNotEmpty) {
+          final firstProperty = property[0] as Map<String, dynamic>?;
+          if (firstProperty != null && firstProperty['title'] != null) {
+            final title = firstProperty['title'] as String;
+            print('[Conversation] Found property title from booking.property[0].title: $title');
+            return title;
+          }
+        }
+      }
+    }
+    
+    print('[Conversation] Property title not found in JSON. Available keys: ${json.keys.toList()}');
+    return null;
+  }
+
+  static User? _tryParseUser(dynamic userData) {
+    try {
+      if (userData is Map<String, dynamic>) {
+        // Check if required fields exist
+        if (userData['id'] != null && 
+            (userData['full_name'] != null || userData['fullName'] != null) &&
+            userData['email'] != null) {
+          return User.fromJson(userData);
+        } else {
+          print('[Conversation] User data missing required fields: $userData');
+          return null;
+        }
+      } else {
+        print('[Conversation] User data is not a Map: ${userData.runtimeType}');
+        return null;
+      }
+    } catch (e) {
+      print('[Conversation] Error parsing user: $e');
+      print('[Conversation] User data: $userData');
+      return null;
+    }
+  }
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
     try {
@@ -90,16 +147,19 @@ class Conversation extends Equatable {
             ? DateTime.parse(json['last_message_at'] as String)
             : null,
         client: json['client'] != null
-            ? User.fromJson(json['client'] as Map<String, dynamic>)
+            ? _tryParseUser(json['client'])
             : null,
         owner: json['owner'] != null
-            ? User.fromJson(json['owner'] as Map<String, dynamic>)
+            ? _tryParseUser(json['owner'])
             : null,
         lastMessage: json['last_message'] != null
             ? Message.fromJson(json['last_message'] as Map<String, dynamic>)
             : null,
         unreadCount: json['unread_count'] as int?,
-        propertyTitle: json['property_title'] as String?,
+        propertyTitle: _extractPropertyTitle(json),
+        bookingStartDate: json['booking_start_date'] != null
+            ? DateTime.parse(json['booking_start_date'] as String)
+            : null,
       );
     } catch (e) {
       print('[Conversation] Error parsing conversation: $e');
@@ -123,6 +183,7 @@ class Conversation extends Equatable {
       if (lastMessage != null) 'last_message': lastMessage!.toJson(),
       if (unreadCount != null) 'unread_count': unreadCount,
       if (propertyTitle != null) 'property_title': propertyTitle,
+      if (bookingStartDate != null) 'booking_start_date': bookingStartDate!.toIso8601String(),
     };
   }
 
@@ -140,6 +201,7 @@ class Conversation extends Equatable {
     Message? lastMessage,
     int? unreadCount,
     String? propertyTitle,
+    DateTime? bookingStartDate,
   }) {
     return Conversation(
       id: id ?? this.id,
@@ -155,6 +217,7 @@ class Conversation extends Equatable {
       lastMessage: lastMessage ?? this.lastMessage,
       unreadCount: unreadCount ?? this.unreadCount,
       propertyTitle: propertyTitle ?? this.propertyTitle,
+      bookingStartDate: bookingStartDate ?? this.bookingStartDate,
     );
   }
 
@@ -173,6 +236,7 @@ class Conversation extends Equatable {
         lastMessage,
         unreadCount,
         propertyTitle,
+        bookingStartDate,
       ];
 }
 

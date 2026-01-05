@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/models/user.dart';
+import 'package:travelci/core/models/booking.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
@@ -366,7 +367,7 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
   }
 }
 
-class _BookingSheet extends StatefulWidget {
+class _BookingSheet extends ConsumerStatefulWidget {
   final Property property;
   final DateTime? startDate;
   final DateTime? endDate;
@@ -390,17 +391,48 @@ class _BookingSheet extends StatefulWidget {
   });
 
   @override
-  State<_BookingSheet> createState() => _BookingSheetState();
+  ConsumerState<_BookingSheet> createState() => _BookingSheetState();
 }
 
-class _BookingSheetState extends State<_BookingSheet> {
+class _BookingSheetState extends ConsumerState<_BookingSheet> {
   late DateTime _focusedDay;
   late TextEditingController _localMessageController;
   bool _isLoading = false;
+  List<Booking> _propertyBookings = [];
+  bool _loadingBookings = true;
 
   // Helper pour normaliser les dates (sans heure)
   DateTime _normalizeDate(DateTime date) {
     return DateTime(date.year, date.month, date.day);
+  }
+
+  // Check if a date is booked (within any accepted or pending booking)
+  bool _isDateBooked(DateTime date) {
+    final normalizedDate = _normalizeDate(date);
+    return _propertyBookings.any((booking) {
+      final start = _normalizeDate(booking.startDate);
+      final end = _normalizeDate(booking.endDate);
+      // Check if date is within booking range (inclusive)
+      return (normalizedDate.isAtSameMomentAs(start) || 
+              normalizedDate.isAfter(start)) &&
+             (normalizedDate.isAtSameMomentAs(end) || 
+              normalizedDate.isBefore(end));
+    });
+  }
+
+  // Get all booked dates as a set for quick lookup
+  Set<DateTime> _getBookedDates() {
+    final bookedDates = <DateTime>{};
+    for (final booking in _propertyBookings) {
+      final start = _normalizeDate(booking.startDate);
+      final end = _normalizeDate(booking.endDate);
+      var current = start;
+      while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
+        bookedDates.add(current);
+        current = current.add(const Duration(days: 1));
+      }
+    }
+    return bookedDates;
   }
 
   @override
@@ -409,6 +441,29 @@ class _BookingSheetState extends State<_BookingSheet> {
     _focusedDay = widget.startDate ?? DateTime.now();
     _localMessageController = TextEditingController(text: widget.messageController.text);
     _localMessageController.addListener(_onMessageChanged);
+    _loadPropertyBookings();
+  }
+
+  Future<void> _loadPropertyBookings() async {
+    try {
+      final bookingService = ref.read(bookingServiceProvider);
+      final bookings = await bookingService.getPropertyBookings(widget.property.id);
+      if (mounted) {
+        setState(() {
+          _propertyBookings = bookings;
+          _loadingBookings = false;
+        });
+      }
+    } catch (e) {
+      // If loading fails, just continue without blocking dates
+      // This is not critical for the booking flow
+      print('[BookingSheet] Error loading property bookings: $e');
+      if (mounted) {
+        setState(() {
+          _loadingBookings = false;
+        });
+      }
+    }
   }
 
   @override
@@ -472,13 +527,13 @@ class _BookingSheetState extends State<_BookingSheet> {
           ),
           const SizedBox(height: 24),
           SizedBox(
-            height: 350,
+            height: 400,
             child: AbsorbPointer(
               absorbing: _isLoading,
               child: Opacity(
                 opacity: _isLoading ? 0.5 : 1.0,
                 child: TableCalendar(
-              key: ValueKey('${widget.startDate}_${widget.endDate}'),
+              key: ValueKey('${widget.startDate}_${widget.endDate}_${_propertyBookings.length}'),
               firstDay: DateTime.now(),
               lastDay: DateTime.now().add(const Duration(days: 365)),
               focusedDay: _focusedDay,
@@ -501,6 +556,81 @@ class _BookingSheetState extends State<_BookingSheet> {
               rangeStartDay: widget.startDate != null ? _normalizeDate(widget.startDate!) : null,
               rangeEndDay: widget.endDate != null ? _normalizeDate(widget.endDate!) : null,
               rangeSelectionMode: RangeSelectionMode.toggledOn,
+              // Disable booked dates
+              enabledDayPredicate: (day) {
+                final normalizedDay = _normalizeDate(day);
+                final today = _normalizeDate(DateTime.now());
+                // Disable past dates and booked dates
+                return !normalizedDay.isBefore(today) && !_isDateBooked(day);
+              },
+              // Style booked dates in grey
+              calendarBuilders: CalendarBuilders(
+                defaultBuilder: (context, date, _) {
+                  if (_isDateBooked(date)) {
+                    return Container(
+                      margin: const EdgeInsets.all(4.0),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${date.day}',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return null;
+                },
+                todayBuilder: (context, date, _) {
+                  if (_isDateBooked(date)) {
+                    return Container(
+                      margin: const EdgeInsets.all(4.0),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[400],
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey[600]!, width: 1),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${date.day}',
+                          style: TextStyle(
+                            color: Colors.grey[700],
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return null;
+                },
+                outsideBuilder: (context, date, _) {
+                  if (_isDateBooked(date)) {
+                    return Container(
+                      margin: const EdgeInsets.all(4.0),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${date.day}',
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return null;
+                },
+              ),
               onDaySelected: (selectedDay, focusedDay) {
                 if (mounted) {
                   setState(() {
@@ -512,6 +642,18 @@ class _BookingSheetState extends State<_BookingSheet> {
                 
                 // Vérifier que la date sélectionnée n'est pas dans le passé
                 if (normalizedSelected.isBefore(today)) {
+                  return;
+                }
+                
+                // Vérifier que la date n'est pas réservée
+                if (_isDateBooked(selectedDay)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Cette date est déjà réservée'),
+                      backgroundColor: Colors.orange,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
                   return;
                 }
                 
@@ -542,6 +684,30 @@ class _BookingSheetState extends State<_BookingSheet> {
                     _focusedDay = focusedDay;
                   });
                 }
+                // Validate range doesn't include booked dates
+                if (start != null && end != null) {
+                  var current = start;
+                  bool hasBookedDate = false;
+                  while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
+                    if (_isDateBooked(current)) {
+                      hasBookedDate = true;
+                      break;
+                    }
+                    current = current.add(const Duration(days: 1));
+                  }
+                  
+                  if (hasBookedDate) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('La période sélectionnée contient des dates déjà réservées'),
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+                }
+                
                 if (start != null) {
                   widget.onStartDateSelected(_normalizeDate(start));
                 }

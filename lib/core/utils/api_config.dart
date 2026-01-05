@@ -34,6 +34,7 @@ class ApiConfig {
   // Property endpoints - use relative paths
   static String get propertiesEndpoint => '$apiPath/properties';
   static String propertyEndpoint(String id) => '$apiPath/properties/$id';
+  static String propertyBookingsEndpoint(String id) => '$apiPath/properties/$id/bookings';
 
   // Booking endpoints - use relative paths
   static String get bookingsEndpoint => '$apiPath/bookings';
@@ -47,7 +48,9 @@ class ApiConfig {
   // Chat endpoints - use relative paths
   static String get conversationsEndpoint => '$apiPath/conversations';
   static String conversationEndpoint(String id) => '$apiPath/conversations/$id';
-  static String conversationMessagesEndpoint(String id) => '$apiPath/conversations/$id/messages';
+  // New format: /api/messages?conversation_id=...
+  static String get messagesEndpoint => '$apiPath/messages';
+  static String conversationMessagesEndpoint(String conversationId) => '$apiPath/messages?conversation_id=$conversationId';
   static String conversationUploadFileEndpoint(String id) => '$apiPath/conversations/$id/upload-file';
   static String conversationUnreadCountEndpoint(String id) => '$apiPath/conversations/$id/unread-count';
   static String messageReadEndpoint(String id) => '$apiPath/messages/$id/read';

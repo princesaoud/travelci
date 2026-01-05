@@ -10,7 +10,7 @@ Application Flutter pour la réservation de logements en Côte d'Ivoire (MVP).
 - 📱 Détails des logements avec galerie photos
 - 📅 Réservation avec sélection de dates
 - 📋 Gestion des réservations (en attente, acceptées, refusées, annulées)
-- 💬 Messagerie (interface préparée)
+- 💬 Messagerie en temps réel avec support de fichiers
 
 ### Pour les Propriétaires
 - 📊 Tableau de bord avec statistiques
@@ -29,6 +29,8 @@ Application Flutter pour la réservation de logements en Côte d'Ivoire (MVP).
 - **Image Picker** 1.0.7 - Sélection d'images
 - **Table Calendar** 3.0.9 - Sélection de dates
 - **Intl** 0.20.2 - Formatage XOF et dates
+- **File Picker** 8.3.7 - Sélection de fichiers pour la messagerie
+- **Open Filex** 4.7.0 - Ouverture de fichiers joints
 
 ## 📦 Installation
 
@@ -129,7 +131,8 @@ L'application détecte automatiquement le rôle de l'utilisateur et affiche l'in
 - `/` - Accueil avec recherche de logements
 - `/property/:id` - Détails d'un logement avec réservation
 - `/bookings` - Mes réservations
-- `/chat` - Messagerie (interface préparée)
+- `/conversations` - Liste des conversations
+- `/conversations/:id` - Détails d'une conversation avec messages en temps réel
 - `/search` - Recherche avancée avec filtres
 
 ### Propriétaire
@@ -137,7 +140,8 @@ L'application détecte automatiquement le rôle de l'utilisateur et affiche l'in
 - `/owner/property/new` - Ajouter un logement (avec upload d'images)
 - `/owner/property/:id` - Modifier un logement
 - `/owner/bookings` - Demandes de réservation
-- `/owner/chat` - Messagerie avec clients
+- `/conversations` - Liste des conversations avec clients
+- `/conversations/:id` - Détails d'une conversation avec messages en temps réel
 
 ## 🏗️ Architecture
 
@@ -148,16 +152,20 @@ lib/
 │   │   ├── user.dart
 │   │   ├── property.dart
 │   │   ├── booking.dart
+│   │   ├── conversation.dart
+│   │   ├── message.dart
 │   │   └── api_response.dart
 │   ├── providers/           # Providers Riverpod (state management)
 │   │   ├── auth_provider.dart
 │   │   ├── property_provider.dart
-│   │   └── booking_provider.dart
+│   │   ├── booking_provider.dart
+│   │   └── chat_provider.dart
 │   ├── services/            # Services API
 │   │   ├── api_service.dart      # Service de base (Dio)
 │   │   ├── auth_service.dart     # Authentification
 │   │   ├── property_service.dart # Gestion des propriétés
-│   │   └── booking_service.dart  # Gestion des réservations
+│   │   ├── booking_service.dart  # Gestion des réservations
+│   │   └── chat_service.dart      # Messagerie et conversations
 │   ├── utils/               # Utilitaires
 │   │   ├── api_config.dart        # Configuration API
 │   │   ├── token_manager.dart     # Gestion des tokens JWT
@@ -200,6 +208,8 @@ L'application est entièrement intégrée avec le backend TravelCI via une API R
   - Propriétés : `/api/properties/*`
   - Réservations : `/api/bookings/*`
   - Images : `/api/images/*`
+  - Conversations : `/api/conversations/*`
+  - Messages : `/api/messages/*`
 
 ### Authentification
 
@@ -234,6 +244,14 @@ L'application est entièrement intégrée avec le backend TravelCI via une API R
 - Liste des réservations (client/propriétaire)
 - Mise à jour du statut (accepter/refuser)
 - Annulation
+
+✅ **Messagerie en temps réel**
+- Conversations automatiquement créées pour chaque réservation
+- Envoi et réception de messages en temps réel
+- Support de fichiers joints (images, PDF, documents)
+- Affichage des messages avec statut de lecture
+- Tri automatique des conversations par date de dernier message
+- Titre de conversation avec nom de propriété et date de réservation
 
 ✅ **Interface utilisateur**
 - Navigation adaptative selon le rôle
@@ -272,13 +290,13 @@ Si vous souhaitez des notifications push même quand l'app est fermée, vous pou
 ## 🔜 Prochaines étapes
 
 - [x] Notifications locales (implémenté)
+- [x] Chat en temps réel (implémenté)
 - [ ] Notifications push (Firebase Cloud Messaging - optionnel)
 - [ ] Paiements (CinetPay, Orange Money)
 - [ ] Géolocalisation et cartes
 - [ ] Système de favoris
 - [ ] Avis et notes
 - [ ] Recherche par géolocalisation
-- [ ] Chat en temps réel
 - [ ] Notifications email/SMS
 
 ## 🐛 Dépannage
