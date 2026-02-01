@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -101,6 +102,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ? IconButton(
                         icon: const Icon(FontAwesomeIcons.xmark),
                         onPressed: () {
+                          tapFeedback();
                           _searchController.clear();
                         },
                       )
@@ -175,6 +177,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                           trailing: const Icon(FontAwesomeIcons.chevronRight),
                           onTap: () {
+                            tapFeedback();
                             // TODO: Navigate to chat detail with owner
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(

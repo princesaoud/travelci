@@ -35,6 +35,8 @@ class User extends Equatable {
   final String? phone;
   final UserRole role;
   final bool isVerified;
+  final String? nationalIdFrontUrl;
+  final String? nationalIdBackUrl;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -45,6 +47,8 @@ class User extends Equatable {
     this.phone,
     required this.role,
     this.isVerified = false,
+    this.nationalIdFrontUrl,
+    this.nationalIdBackUrl,
     required this.createdAt,
     this.updatedAt,
   });
@@ -70,6 +74,8 @@ class User extends Equatable {
           ? UserRoleExtension.fromString(json['role'] as String)
           : UserRole.client,
       isVerified: json['is_verified'] as bool? ?? json['isVerified'] as bool? ?? false,
+      nationalIdFrontUrl: json['national_id_front_url'] as String? ?? json['nationalIdFrontUrl'] as String?,
+      nationalIdBackUrl: json['national_id_back_url'] as String? ?? json['nationalIdBackUrl'] as String?,
       createdAt: createdAt,
       updatedAt: json['updated_at'] != null || json['updatedAt'] != null
           ? DateTime.parse(json['updated_at'] as String? ?? json['updatedAt'] as String)
@@ -91,6 +97,6 @@ class User extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, fullName, email, phone, role, isVerified, createdAt, updatedAt];
+  List<Object?> get props => [id, fullName, email, phone, role, isVerified, nationalIdFrontUrl, nationalIdBackUrl, createdAt, updatedAt];
 }
 

@@ -14,6 +14,7 @@ import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/chat_provider.dart';
 import 'package:travelci/core/services/chat_service.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class ChatDetailScreen extends ConsumerStatefulWidget {
   final Conversation conversation;
@@ -630,6 +631,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
                                     // Image preview
                                     GestureDetector(
                                       onTap: () {
+                                        tapFeedback();
                                         _previewImage(context, message.fileUrl!, message.fileName);
                                       },
                                       child: Container(
@@ -731,6 +733,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
                                     // Non-image file
                                     GestureDetector(
                                       onTap: () async {
+                                        tapFeedback();
                                         try {
                                           await OpenFilex.open(message.fileUrl!);
                                         } catch (e) {
@@ -885,6 +888,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
                           IconButton(
                             icon: const Icon(Icons.close, size: 18),
                             onPressed: () {
+                              tapFeedback();
                               setState(() {
                                 _selectedFilePath = null;
                                 _selectedFileName = null;
@@ -924,7 +928,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
                     children: [
                       IconButton(
                         icon: const Icon(FontAwesomeIcons.paperclip),
-                        onPressed: (_isSending || _isUploadingFile) ? null : _pickFile,
+                        onPressed: (_isSending || _isUploadingFile) ? null : () { tapFeedback(); _pickFile(); },
                         tooltip: 'Joindre un fichier',
                       ),
                       Expanded(
@@ -957,7 +961,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(FontAwesomeIcons.paperPlane),
-                        onPressed: (_isSending || _isUploadingFile) ? null : _sendMessage,
+                        onPressed: (_isSending || _isUploadingFile) ? null : () { tapFeedback(); _sendMessage(); },
                         style: IconButton.styleFrom(
                           backgroundColor: Theme.of(context).colorScheme.primary,
                           foregroundColor: Colors.white,

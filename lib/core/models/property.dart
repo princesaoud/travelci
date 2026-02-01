@@ -36,6 +36,8 @@ class Property extends Equatable {
   final String city;
   final double? latitude;
   final double? longitude;
+  /// Nombre de pièces: 1 = studio, 2 = 2 pièces (1 chambre + séjour), etc.
+  final int? roomCount;
   final List<String> imageUrls;
   final List<String> amenities;
   final DateTime createdAt;
@@ -53,6 +55,7 @@ class Property extends Equatable {
     required this.city,
     this.latitude,
     this.longitude,
+    this.roomCount,
     required this.imageUrls,
     required this.amenities,
     required this.createdAt,
@@ -77,6 +80,7 @@ class Property extends Equatable {
       city: data['city'] as String,
       latitude: data['latitude'] != null ? (data['latitude'] as num).toDouble() : null,
       longitude: data['longitude'] != null ? (data['longitude'] as num).toDouble() : null,
+      roomCount: data['room_count'] != null ? (data['room_count'] as num).toInt() : data['roomCount'] as int?,
       imageUrls: data['image_urls'] != null
           ? List<String>.from(data['image_urls'] as List)
           : data['imageUrls'] != null
@@ -120,6 +124,7 @@ class Property extends Equatable {
         city,
         latitude,
         longitude,
+        roomCount,
         imageUrls,
         amenities,
         createdAt,

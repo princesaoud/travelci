@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:travelci/core/models/property.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -140,6 +141,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           const SizedBox(height: 32),
           ElevatedButton(
             onPressed: () {
+              tapFeedback();
               Navigator.pop(context, {
                 'city': _cityController.text,
                 'type': _selectedType,

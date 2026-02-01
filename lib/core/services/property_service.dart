@@ -116,6 +116,7 @@ class PropertyService extends ApiService {
     required String city,
     double? latitude,
     double? longitude,
+    int? roomCount,
     List<String> amenities = const [],
     List<File>? images,
   }) async {
@@ -136,6 +137,7 @@ class PropertyService extends ApiService {
       'city': city,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      if (roomCount != null) 'room_count': roomCount,
       if (amenities.isNotEmpty) 'amenities': jsonEncode(amenities),
     });
 
@@ -193,6 +195,7 @@ class PropertyService extends ApiService {
     String? city,
     double? latitude,
     double? longitude,
+    int? roomCount,
     List<String>? amenities,
   }) async {
     final data = <String, dynamic>{};
@@ -206,6 +209,7 @@ class PropertyService extends ApiService {
     if (city != null) data['city'] = city;
     if (latitude != null) data['latitude'] = latitude;
     if (longitude != null) data['longitude'] = longitude;
+    if (roomCount != null) data['room_count'] = roomCount;
     if (amenities != null) data['amenities'] = amenities;
 
     final response = await put<Map<String, dynamic>>(

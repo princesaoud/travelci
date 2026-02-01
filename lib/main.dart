@@ -11,20 +11,20 @@ void main() async {
 
   runApp(
     const ProviderScope(
-      child: TravelCIApp(),
+      child: SOMOApp(),
     ),
   );
 }
 
-class TravelCIApp extends ConsumerWidget {
-  const TravelCIApp({super.key});
+class SOMOApp extends ConsumerWidget {
+  const SOMOApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'TravelCI',
+      title: 'SOMO',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme(

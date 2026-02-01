@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class NotificationBadge extends ConsumerWidget {
   final Widget icon;
@@ -18,7 +19,7 @@ class NotificationBadge extends ConsumerWidget {
     final unreadCount = ref.watch(notificationProvider).unreadCount;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: onTap != null ? () { tapFeedback(); onTap!(); } : null,
       child: Stack(
         clipBehavior: Clip.none,
         children: [

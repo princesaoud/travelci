@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class ClientNavigationWrapper extends ConsumerWidget {
   final int initialIndex;
@@ -58,7 +59,7 @@ class ClientNavigationWrapper extends ConsumerWidget {
       body: child,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
-        onTap: (index) => _onItemTapped(context, index, isAuthenticated),
+        onTap: (index) { tapFeedback(); _onItemTapped(context, index, isAuthenticated); },
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Theme.of(context).colorScheme.primary,
         unselectedItemColor: Colors.grey,

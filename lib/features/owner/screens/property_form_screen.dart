@@ -31,6 +31,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
   final _priceController = TextEditingController();
   PropertyType _selectedType = PropertyType.apartment;
   bool _furnished = false;
+  int _roomCount = 1; // 1 = studio, 2 = 2 pièces, etc.
   final List<String> _amenities = [];
   final List<File> _selectedImages = [];
   final List<String> _removedImageUrls = []; // Track removed existing images
@@ -77,6 +78,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
         _priceController.text = property.pricePerNight.toString();
         _selectedType = property.type;
         _furnished = property.furnished;
+        _roomCount = property.roomCount ?? 1;
         _amenities.clear();
         _amenities.addAll(property.amenities);
         // Reset removed images list when loading property
@@ -170,6 +172,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
               pricePerNight: double.parse(_priceController.text),
               address: _addressController.text.trim(),
               city: _cityController.text.trim(),
+              roomCount: _roomCount,
               amenities: _amenities,
             );
 
@@ -194,6 +197,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
               pricePerNight: double.parse(_priceController.text),
               address: _addressController.text.trim(),
               city: _cityController.text.trim(),
+              roomCount: _roomCount,
               amenities: _amenities,
               images: _selectedImages.isEmpty ? null : _selectedImages,
             );
@@ -289,7 +293,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                 
                 if (totalImages == 0) {
                   return OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _pickImages,
+                    onPressed: _isLoading ? null : () { tapFeedback(); _pickImages(); },
                     icon: const Icon(FontAwesomeIcons.image),
                     label: const Text('Ajouter des photos'),
                     style: OutlinedButton.styleFrom(
@@ -356,7 +360,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                                             padding: const EdgeInsets.all(4),
                                             minimumSize: const Size(32, 32),
                                           ),
-                                          onPressed: _isLoading ? null : () => _removeExistingImage(index),
+                                          onPressed: _isLoading ? null : () { tapFeedback(); _removeExistingImage(index); },
                                           tooltip: 'Supprimer cette image',
                                         ),
                                       ),
@@ -399,7 +403,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                                             padding: const EdgeInsets.all(4),
                                             minimumSize: const Size(32, 32),
                                           ),
-                                          onPressed: _isLoading ? null : () => _removeImage(fileIndex),
+                                          onPressed: _isLoading ? null : () { tapFeedback(); _removeImage(fileIndex); },
                                           tooltip: 'Supprimer cette image',
                                         ),
                                       ),
@@ -413,7 +417,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                       ),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
-                        onPressed: _isLoading ? null : _pickImages,
+                        onPressed: _isLoading ? null : () { tapFeedback(); _pickImages(); },
                         icon: const Icon(FontAwesomeIcons.image),
                         label: const Text('Ajouter plus de photos'),
                       ),
@@ -455,6 +459,30 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                 setState(() {
                   _furnished = value;
                 });
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              value: _roomCount,
+              decoration: const InputDecoration(
+                labelText: 'Nombre de pièces',
+                border: OutlineInputBorder(),
+                hintText: 'Ex: 1 = studio, 2 = 2 pièces (1 chambre + séjour)',
+              ),
+              items: const [
+                DropdownMenuItem(value: 1, child: Text('1 pièce (Studio)')),
+                DropdownMenuItem(value: 2, child: Text('2 pièces (1 chambre + séjour)')),
+                DropdownMenuItem(value: 3, child: Text('3 pièces')),
+                DropdownMenuItem(value: 4, child: Text('4 pièces')),
+                DropdownMenuItem(value: 5, child: Text('5 pièces')),
+                DropdownMenuItem(value: 6, child: Text('6 pièces et plus')),
+              ],
+              onChanged: _isLoading ? null : (value) {
+                if (value != null) {
+                  setState(() {
+                    _roomCount = value;
+                  });
+                }
               },
             ),
             const SizedBox(height: 16),
@@ -536,7 +564,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             ),
             const SizedBox(height: 32),
             ElevatedButton(
-              onPressed: _isLoading ? null : _saveProperty,
+              onPressed: _isLoading ? null : () { tapFeedback(); _saveProperty(); },
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),

@@ -8,6 +8,7 @@ import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/chat_provider.dart';
 import 'package:travelci/features/shared/screens/chat_detail_screen.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class ConversationsListScreen extends ConsumerStatefulWidget {
   const ConversationsListScreen({super.key});
@@ -151,6 +152,7 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
                     ? IconButton(
                         icon: const Icon(FontAwesomeIcons.xmark),
                         onPressed: () {
+                          tapFeedback();
                           _searchController.clear();
                         },
                       )
@@ -289,6 +291,7 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
                                           )
                                         : null,
                                     onTap: () {
+                                      tapFeedback();
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
@@ -375,6 +378,7 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
                                         )
                                       : null,
                                   onTap: () {
+                                    tapFeedback();
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(

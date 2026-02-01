@@ -1,4 +1,6 @@
 import 'dart:developer' as developer;
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:travelci/core/models/api_response.dart';
 import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/services/api_service.dart';
@@ -9,14 +11,46 @@ import 'package:travelci/core/utils/token_manager.dart';
 /// 
 /// Handles user authentication (register, login, logout, get current user)
 class AuthService extends ApiService {
-  /// Register a new user
+  /// Register a new user. For owner role, optional [nationalIdFront] and [nationalIdBack] (images) can be provided.
   Future<AuthResponse> register({
     required String fullName,
     required String email,
     required String password,
     String? phone,
     UserRole role = UserRole.client,
+    File? nationalIdFront,
+    File? nationalIdBack,
   }) async {
+    final bool useMultipart = role == UserRole.owner && (nationalIdFront != null || nationalIdBack != null);
+
+    if (useMultipart) {
+      final formData = FormData.fromMap({
+        'full_name': fullName,
+        'email': email,
+        'password': password,
+        if (phone != null) 'phone': phone,
+        'role': role.value,
+      });
+      if (nationalIdFront != null) {
+        formData.files.add(MapEntry(
+          'national_id_front',
+          await MultipartFile.fromFile(nationalIdFront.path, filename: 'national_id_front.jpg'),
+        ));
+      }
+      if (nationalIdBack != null) {
+        formData.files.add(MapEntry(
+          'national_id_back',
+          await MultipartFile.fromFile(nationalIdBack.path, filename: 'national_id_back.jpg'),
+        ));
+      }
+      final response = await dio.post<Map<String, dynamic>>(
+        ApiConfig.registerEndpoint,
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return _parseRegisterResponse(response.data as Map<String, dynamic>);
+    }
+
     final response = await post<Map<String, dynamic>>(
       ApiConfig.registerEndpoint,
       data: {
@@ -28,25 +62,17 @@ class AuthService extends ApiService {
       },
       parser: (data) => data as Map<String, dynamic>,
     );
+    return _parseRegisterResponse(response as Map<String, dynamic>);
+  }
 
-    final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
-      response,
-      (data) => data,
-    );
-
+  Future<AuthResponse> _parseRegisterResponse(Map<String, dynamic> body) async {
+    final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(body, (data) => data as Map<String, dynamic>);
     if (apiResponse.data != null) {
       final userData = apiResponse.data!['user'] as Map<String, dynamic>;
       final token = apiResponse.data!['token'] as String;
-
-      // Save token
       await TokenManager.saveToken(token);
-
-      return AuthResponse(
-        user: User.fromJson(userData),
-        token: token,
-      );
+      return AuthResponse(user: User.fromJson(userData), token: token);
     }
-
     throw Exception(apiResponse.error?.message ?? 'Erreur lors de l\'inscription');
   }
 

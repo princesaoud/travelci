@@ -35,6 +35,7 @@ class ApiConfig {
   static String get propertiesEndpoint => '$apiPath/properties';
   static String propertyEndpoint(String id) => '$apiPath/properties/$id';
   static String propertyBookingsEndpoint(String id) => '$apiPath/properties/$id/bookings';
+  static String propertyBlockedDatesEndpoint(String id) => '$apiPath/properties/$id/blocked-dates';
 
   // Booking endpoints - use relative paths
   static String get bookingsEndpoint => '$apiPath/bookings';

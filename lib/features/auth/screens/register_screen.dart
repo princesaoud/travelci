@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -22,6 +25,51 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   UserRole _selectedRole = UserRole.client;
+  File? _nationalIdFront;
+  File? _nationalIdBack;
+  final ImagePicker _imagePicker = ImagePicker();
+
+  Future<void> _pickIdImage(bool front) async {
+    try {
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Appareil photo'),
+                onTap: () { tapFeedback(); Navigator.pop(context, ImageSource.camera); },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galerie'),
+                onTap: () { tapFeedback(); Navigator.pop(context, ImageSource.gallery); },
+              ),
+            ],
+          ),
+        ),
+      );
+      if (source == null || !mounted) return;
+      final picker = await _imagePicker.pickImage(source: source, imageQuality: 85);
+      if (picker != null && mounted) {
+        setState(() {
+          if (front) {
+            _nationalIdFront = File(picker.path);
+          } else {
+            _nationalIdBack = File(picker.path);
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -44,6 +92,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               : _phoneController.text.trim(),
           password: _passwordController.text,
           role: _selectedRole,
+          nationalIdFront: _selectedRole == UserRole.owner ? _nationalIdFront : null,
+          nationalIdBack: _selectedRole == UserRole.owner ? _nationalIdBack : null,
         );
 
     // Check result after registration attempt
@@ -175,11 +225,56 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           if (value != null) {
                             setState(() {
                               _selectedRole = value;
+                              if (value != UserRole.owner) {
+                                _nationalIdFront = null;
+                                _nationalIdBack = null;
+                              }
                             });
                           }
                         },
                 ),
-                const SizedBox(height: 16),
+                if (_selectedRole == UserRole.owner) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Pièce d\'identité (recto et verso)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: authState.isLoading ? null : () { tapFeedback(); _pickIdImage(true); },
+                          icon: const Icon(FontAwesomeIcons.idCard),
+                          label: Text(_nationalIdFront != null ? 'Recto ✓' : 'Recto'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: authState.isLoading ? null : () { tapFeedback(); _pickIdImage(false); },
+                          icon: const Icon(FontAwesomeIcons.idCard),
+                          label: Text(_nationalIdBack != null ? 'Verso ✓' : 'Verso'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_nationalIdFront != null || _nationalIdBack != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Photos ajoutées. Vous pourrez les voir sur votre profil.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                ],
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -245,7 +340,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: authState.isLoading ? null : _handleRegister,
+                  onPressed: authState.isLoading ? null : () { tapFeedback(); _handleRegister(); },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
@@ -281,9 +376,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 TextButton(
                   onPressed: authState.isLoading
                       ? null
-                      : () {
-                          context.pop();
-                        },
+                      : () { tapFeedback(); context.pop(); },
                   child: const Text('Déjà un compte ? Se connecter'),
                 ),
                   ],

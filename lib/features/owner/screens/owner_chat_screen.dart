@@ -8,6 +8,7 @@ import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/services/mock_data_service.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class OwnerChatScreen extends ConsumerStatefulWidget {
   final String? clientId;
@@ -138,6 +139,7 @@ class _OwnerChatScreenState extends ConsumerState<OwnerChatScreen> {
                     ? IconButton(
                         icon: const Icon(FontAwesomeIcons.xmark),
                         onPressed: () {
+                          tapFeedback();
                           _searchController.clear();
                         },
                       )
@@ -358,6 +360,7 @@ class _ChatDetailView extends ConsumerWidget {
                 IconButton(
                   icon: const Icon(FontAwesomeIcons.paperPlane),
                   onPressed: () {
+                    tapFeedback();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Fonctionnalité de chat en cours de développement'),

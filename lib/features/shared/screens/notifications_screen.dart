@@ -4,6 +4,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:travelci/core/models/notification.dart' as app;
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/utils/date_formatter.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -33,6 +34,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           if (notificationState.unreadCount > 0)
             TextButton.icon(
               onPressed: () async {
+                tapFeedback();
                 await ref.read(notificationProvider.notifier).markAllAsRead();
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -103,11 +105,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () { tapFeedback(); Navigator.of(dialogContext).pop(); },
             child: const Text('Annuler'),
           ),
           TextButton(
             onPressed: () async {
+              tapFeedback();
               Navigator.of(dialogContext).pop();
               await ref.read(notificationProvider.notifier).deleteAllNotifications();
               if (mounted) {
@@ -190,6 +193,7 @@ class _NotificationCard extends ConsumerWidget {
         color: isUnread ? Colors.blue.shade50 : null,
         child: InkWell(
           onTap: () async {
+            tapFeedback();
             if (isUnread) {
               await ref.read(notificationProvider.notifier).markAsRead(notification.id);
             }

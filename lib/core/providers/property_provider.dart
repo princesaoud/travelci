@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:travelci/core/models/api_response.dart';
 import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/services/property_service.dart';
@@ -90,6 +91,26 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
     }
   }
 
+  /// Sort properties by distance from user location (nearest first).
+  /// Properties without latitude/longitude are placed at the end.
+  List<Property> sortPropertiesByDistance(List<Property> properties, double userLat, double userLng) {
+    final withCoords = <Property>[];
+    final withoutCoords = <Property>[];
+    for (final p in properties) {
+      if (p.latitude != null && p.longitude != null) {
+        withCoords.add(p);
+      } else {
+        withoutCoords.add(p);
+      }
+    }
+    withCoords.sort((a, b) {
+      final dA = Geolocator.distanceBetween(userLat, userLng, a.latitude!, a.longitude!);
+      final dB = Geolocator.distanceBetween(userLat, userLng, b.latitude!, b.longitude!);
+      return dA.compareTo(dB);
+    });
+    return [...withCoords, ...withoutCoords];
+  }
+
   /// Search/filter properties (local filtering for immediate feedback)
   List<Property> searchProperties({
     String? city,
@@ -168,6 +189,7 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
     required String city,
     double? latitude,
     double? longitude,
+    int? roomCount,
     List<String> amenities = const [],
     List<File>? images,
   }) async {
@@ -184,6 +206,7 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
         city: city,
         latitude: latitude,
         longitude: longitude,
+        roomCount: roomCount,
         amenities: amenities,
         images: images,
       );
@@ -218,6 +241,7 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
     String? city,
     double? latitude,
     double? longitude,
+    int? roomCount,
     List<String>? amenities,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
@@ -234,6 +258,7 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
         city: city,
         latitude: latitude,
         longitude: longitude,
+        roomCount: roomCount,
         amenities: amenities,
       );
 

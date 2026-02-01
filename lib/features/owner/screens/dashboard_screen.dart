@@ -4,15 +4,19 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travelci/core/models/booking.dart';
 import 'package:travelci/core/models/property.dart';
+import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/widgets/notification_badge.dart';
 import 'package:travelci/features/shared/screens/notifications_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
+import 'package:travelci/core/utils/feedback.dart';
 import 'package:travelci/features/shared/screens/conversations_list_screen.dart';
 import 'package:travelci/features/owner/screens/booking_requests_screen.dart';
+import 'package:travelci/features/owner/screens/property_availability_screen.dart';
 
 class OwnerDashboardScreen extends ConsumerStatefulWidget {
   const OwnerDashboardScreen({super.key});
@@ -25,11 +29,12 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Load properties and bookings when dashboard is opened
+    // Load properties, bookings, and refresh user (for profile/ID images) when dashboard is opened
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(propertyProvider.notifier).loadProperties();
         ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
+        ref.read(authProvider.notifier).refreshUser();
       }
     });
   }
@@ -74,45 +79,21 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
         actions: [
           IconButton(
             icon: const Icon(FontAwesomeIcons.comments),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ConversationsListScreen(),
-                ),
-              );
-            },
+            onPressed: () { tapFeedback(); Navigator.push(context, MaterialPageRoute(builder: (context) => const ConversationsListScreen())); },
             tooltip: 'Messages',
           ),
           NotificationBadge(
             icon: const Icon(FontAwesomeIcons.bell),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const NotificationsScreen(),
-                ),
-              );
-            },
+            onTap: () { tapFeedback(); Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsScreen())); },
           ),
           IconButton(
             icon: const Icon(FontAwesomeIcons.bookmark),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const BookingRequestsScreen(),
-                ),
-              );
-            },
+            onPressed: () { tapFeedback(); Navigator.push(context, MaterialPageRoute(builder: (context) => const BookingRequestsScreen())); },
             tooltip: 'Demandes de réservation',
           ),
           IconButton(
             icon: const Icon(FontAwesomeIcons.user),
-            onPressed: () {
-              ref.read(authProvider.notifier).logout();
-              context.go('/login');
-            },
+            onPressed: () { tapFeedback(); ref.read(authProvider.notifier).logout(); context.go('/login'); },
             tooltip: 'Déconnexion',
           ),
         ],
@@ -124,6 +105,8 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
         },
         child: Column(
           children: [
+            // Profile card (owner: name, email, national ID images)
+            if (user != null) _ProfileCard(user: user),
             // Stats cards
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -197,11 +180,151 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          context.push('/owner/property/new');
-        },
+        onPressed: () { tapFeedback(); context.push('/owner/property/new'); },
         icon: const Icon(FontAwesomeIcons.plus),
         label: const Text('Ajouter un logement'),
+      ),
+    );
+  }
+}
+
+class _ProfileCard extends StatelessWidget {
+  final User user;
+
+  const _ProfileCard({required this.user});
+
+  void _showFullImage(BuildContext context, String url, String label) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            Flexible(
+              child: InteractiveViewer(
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const Center(child: CircularProgressIndicator()),
+                  errorWidget: (_, __, ___) => const Icon(Icons.error, size: 48),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () { tapFeedback(); Navigator.of(context).pop(); },
+              child: const Text('Fermer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFront = user.nationalIdFrontUrl != null && user.nationalIdFrontUrl!.isNotEmpty;
+    final hasBack = user.nationalIdBackUrl != null && user.nationalIdBackUrl!.isNotEmpty;
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  child: Icon(FontAwesomeIcons.user, color: Theme.of(context).colorScheme.onPrimaryContainer, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.fullName,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        user.email,
+                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (hasFront || hasBack) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Text(
+                'Pièce d\'identité',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700]),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (hasFront)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () { tapFeedback(); _showFullImage(context, user.nationalIdFrontUrl!, 'Recto'); },
+                        child: Column(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: CachedNetworkImage(
+                                imageUrl: user.nationalIdFrontUrl!,
+                                height: 80,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => Container(color: Colors.grey[200], child: const Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                                errorWidget: (_, __, ___) => Container(height: 80, color: Colors.grey[300], child: const Icon(Icons.error)),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text('Recto', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (hasFront && hasBack) const SizedBox(width: 12),
+                  if (hasBack)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () { tapFeedback(); _showFullImage(context, user.nationalIdBackUrl!, 'Verso'); },
+                        child: Column(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: CachedNetworkImage(
+                                imageUrl: user.nationalIdBackUrl!,
+                                height: 80,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => Container(color: Colors.grey[200], child: const Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                                errorWidget: (_, __, ___) => Container(height: 80, color: Colors.grey[300], child: const Icon(Icons.error)),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text('Verso', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -254,7 +377,7 @@ class _StatCard extends StatelessWidget {
 
     if (onTap != null) {
       return InkWell(
-        onTap: onTap,
+        onTap: () { tapFeedback(); onTap!(); },
         borderRadius: BorderRadius.circular(12),
         child: cardContent,
       );
@@ -279,11 +402,11 @@ class _PropertyCard extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () { tapFeedback(); Navigator.of(context).pop(false); },
             child: const Text('Annuler'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () { tapFeedback(); Navigator.of(context).pop(true); },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Supprimer'),
           ),
@@ -320,9 +443,7 @@ class _PropertyCard extends ConsumerWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        onTap: () {
-          context.push('/owner/property/${property.id}');
-        },
+        onTap: () { tapFeedback(); context.push('/owner/property/${property.id}'); },
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
@@ -434,15 +555,18 @@ class _PropertyCard extends ConsumerWidget {
                 ),
               ),
               IconButton(
+                icon: const Icon(FontAwesomeIcons.calendarDays),
+                onPressed: () { tapFeedback(); context.push('/owner/property/${property.id}/availability', extra: property); },
+                tooltip: 'Disponibilité',
+              ),
+              IconButton(
                 icon: const Icon(FontAwesomeIcons.pen),
-                onPressed: () {
-                  context.push('/owner/property/${property.id}');
-                },
+                onPressed: () { tapFeedback(); context.push('/owner/property/${property.id}'); },
                 tooltip: 'Modifier',
               ),
               IconButton(
                 icon: const Icon(FontAwesomeIcons.trash),
-                onPressed: () => _showDeleteConfirmation(context, ref),
+                onPressed: () { tapFeedback(); _showDeleteConfirmation(context, ref); },
                 tooltip: 'Supprimer',
                 color: Colors.red,
               ),

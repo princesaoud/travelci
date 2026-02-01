@@ -12,6 +12,7 @@ import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/providers/chat_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class PropertyDetailScreen extends ConsumerStatefulWidget {
   final String propertyId;
@@ -266,12 +267,29 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
                     children: [
                       Icon(FontAwesomeIcons.locationDot, size: 20, color: Colors.grey[600]),
                       const SizedBox(width: 4),
-                      Text(
-                        '${property.city}, ${property.address}',
-                        style: TextStyle(color: Colors.grey[600]),
+                      Expanded(
+                        child: Text(
+                          '${property.city}, ${property.address}',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
                       ),
                     ],
                   ),
+                  if (property.roomCount != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(FontAwesomeIcons.doorOpen, size: 18, color: Colors.grey[600]),
+                        const SizedBox(width: 6),
+                        Text(
+                          property.roomCount == 1
+                              ? 'Studio (1 pièce)'
+                              : '${property.roomCount} pièces',
+                          style: TextStyle(color: Colors.grey[700], fontSize: 15),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -323,7 +341,7 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
                   const SizedBox(height: 16),
                   if (user?.role == UserRole.client)
                     ElevatedButton.icon(
-                      onPressed: _showBookingDialog,
+                      onPressed: () { tapFeedback(); _showBookingDialog(); },
                       icon: const Icon(FontAwesomeIcons.calendarDays),
                       label: const Text('Demander une réservation'),
                       style: ElevatedButton.styleFrom(
@@ -345,6 +363,7 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
                         const SizedBox(height: 12),
                         ElevatedButton.icon(
                           onPressed: () {
+                            tapFeedback();
                             context.push('/login');
                           },
                           icon: const Icon(FontAwesomeIcons.rightToBracket),
@@ -741,12 +760,12 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
                       const Text('Nombre de voyageurs: '),
                       IconButton(
                         icon: const Icon(FontAwesomeIcons.circleMinus),
-                        onPressed: widget.guests > 1 ? () => widget.onGuestsChanged(widget.guests - 1) : null,
+                        onPressed: widget.guests > 1 ? () { tapFeedback(); widget.onGuestsChanged(widget.guests - 1); } : null,
                       ),
                       Text('${widget.guests}'),
                       IconButton(
                         icon: const Icon(FontAwesomeIcons.circlePlus),
-                        onPressed: () => widget.onGuestsChanged(widget.guests + 1),
+                        onPressed: () { tapFeedback(); widget.onGuestsChanged(widget.guests + 1); },
                       ),
                     ],
                   ),
@@ -803,6 +822,7 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
             onPressed: (_isLoading || widget.startDate == null || widget.endDate == null)
                 ? null
                 : () async {
+                    tapFeedback();
                     setState(() {
                       _isLoading = true;
                     });

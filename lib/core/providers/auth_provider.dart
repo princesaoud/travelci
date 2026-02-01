@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/services/auth_service.dart';
@@ -88,13 +89,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Register new user
+  /// Register new user. For owner role, optional national ID images can be provided.
   Future<void> register({
     required String fullName,
     required String email,
     String? phone,
     required String password,
     UserRole role = UserRole.client,
+    File? nationalIdFront,
+    File? nationalIdBack,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
 
@@ -105,6 +108,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         phone: phone,
         password: password,
         role: role,
+        nationalIdFront: nationalIdFront,
+        nationalIdBack: nationalIdBack,
       );
 
       state = state.copyWith(

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
+import 'package:travelci/core/utils/feedback.dart';
 import 'package:travelci/core/utils/token_manager.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -225,7 +226,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: authState.isLoading ? null : _handleLogin,
+                  onPressed: authState.isLoading ? null : () { tapFeedback(); _handleLogin(); },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
@@ -261,9 +262,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 TextButton(
                   onPressed: authState.isLoading
                       ? null
-                      : () {
-                          context.push('/register');
-                        },
+                      : () { tapFeedback(); context.push('/register'); },
                   child: const Text('Pas encore de compte ? S\'inscrire'),
                 ),
                 const SizedBox(height: 24),
@@ -271,9 +270,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 OutlinedButton.icon(
                   onPressed: authState.isLoading
                       ? null
-                      : () {
-                          context.go('/');
-                        },
+                      : () { tapFeedback(); context.go('/'); },
                   icon: const Icon(FontAwesomeIcons.userGroup),
                   label: const Text('Continuer en tant qu\'invité'),
                   style: OutlinedButton.styleFrom(
@@ -287,10 +284,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 OutlinedButton.icon(
                   onPressed: authState.isLoading
                       ? null
-                      : () {
-                          _emailController.text = 'john@example.com';
-                          _passwordController.text = 'password123';
-                        },
+                      : () { tapFeedback(); _emailController.text = 'john@example.com'; _passwordController.text = 'password123'; },
                   icon: const Icon(FontAwesomeIcons.user),
                   label: const Text('Remplir client'),
                 ),
@@ -298,10 +292,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 OutlinedButton.icon(
                   onPressed: authState.isLoading
                       ? null
-                      : () {
-                          _emailController.text = 'jane@example.com';
-                          _passwordController.text = 'password123';
-                        },
+                      : () { tapFeedback(); _emailController.text = 'jane@example.com'; _passwordController.text = 'password123'; },
                   icon: const Icon(FontAwesomeIcons.building),
                   label: const Text('Remplir propriétaire'),
                 ),

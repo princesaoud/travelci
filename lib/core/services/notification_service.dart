@@ -81,7 +81,7 @@ class NotificationService {
 
     final androidDetails = AndroidNotificationDetails(
       'travelci_channel',
-      'TravelCI Notifications',
+      'SOMO Notifications',
       channelDescription: 'Notifications pour les réservations et messages',
       importance: Importance.high,
       priority: Priority.high,

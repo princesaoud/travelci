@@ -97,7 +97,7 @@ abstract class AppLocalizations {
   /// Le titre de l'application
   ///
   /// In fr, this message translates to:
-  /// **'TravelCI'**
+  /// **'SOMO'**
   String get appTitle;
 }
 

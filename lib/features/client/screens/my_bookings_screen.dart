@@ -10,6 +10,7 @@ import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/date_formatter.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class MyBookingsScreen extends ConsumerStatefulWidget {
   const MyBookingsScreen({super.key});
@@ -125,6 +126,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
                     ? IconButton(
                         icon: const Icon(FontAwesomeIcons.xmark),
                         onPressed: () {
+                          tapFeedback();
                           _searchController.clear();
                         },
                       )
@@ -251,11 +253,12 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () { tapFeedback(); Navigator.of(dialogContext).pop(); },
             child: const Text('Non'),
           ),
           TextButton(
             onPressed: () async {
+              tapFeedback();
               Navigator.of(dialogContext).pop();
               await _handleCancel();
             },
@@ -462,7 +465,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
                 if (widget.booking.status == BookingStatus.pending ||
                     widget.booking.status == BookingStatus.accepted)
                   TextButton(
-                    onPressed: _showCancelConfirmationDialog,
+                    onPressed: () { tapFeedback(); _showCancelConfirmationDialog(); },
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.red,
                     ),

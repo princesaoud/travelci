@@ -10,6 +10,7 @@ import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/date_formatter.dart';
+import 'package:travelci/core/utils/feedback.dart';
 import 'package:travelci/core/models/conversation.dart';
 import 'package:travelci/core/providers/chat_provider.dart';
 import 'package:travelci/features/shared/screens/chat_detail_screen.dart';
@@ -246,12 +247,14 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
         actions: [
           TextButton(
             onPressed: () {
+              tapFeedback();
               Navigator.pop(context);
             },
             child: const Text('Annuler'),
           ),
           ElevatedButton(
             onPressed: () {
+              tapFeedback();
               if (isRequired && reasonController.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Veuillez indiquer un motif')),
@@ -587,6 +590,7 @@ class _BookingRequestCard extends ConsumerWidget {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () async {
+                        tapFeedback();
                         await onDecline();
                       },
                       style: OutlinedButton.styleFrom(
@@ -600,6 +604,7 @@ class _BookingRequestCard extends ConsumerWidget {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
+                        tapFeedback();
                         await onAccept();
                       },
                       style: ElevatedButton.styleFrom(
@@ -614,7 +619,7 @@ class _BookingRequestCard extends ConsumerWidget {
               const SizedBox(height: 16),
               OutlinedButton.icon(
                 onPressed: () async {
-                  // Open conversation for this booking
+                  tapFeedback();
                   await onOpenChat(booking);
                 },
                 icon: const Icon(FontAwesomeIcons.comments),

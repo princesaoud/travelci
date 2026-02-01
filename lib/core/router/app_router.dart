@@ -15,6 +15,8 @@ import 'package:travelci/features/client/screens/client_navigation_wrapper.dart'
 import 'package:travelci/features/owner/screens/booking_requests_screen.dart';
 import 'package:travelci/features/owner/screens/dashboard_screen.dart';
 import 'package:travelci/features/owner/screens/property_form_screen.dart';
+import 'package:travelci/features/owner/screens/property_availability_screen.dart';
+import 'package:travelci/core/models/property.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -174,6 +176,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return PropertyFormScreen(propertyId: id);
+        },
+      ),
+      GoRoute(
+        path: '/owner/property/:id/availability',
+        builder: (context, state) {
+          final property = state.extra as Property?;
+          if (property == null) {
+            return const Scaffold(
+              body: Center(child: Text('Logement introuvable')),
+            );
+          }
+          return PropertyAvailabilityScreen(property: property);
         },
       ),
     ],

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
+import 'package:travelci/core/utils/feedback.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -18,26 +20,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _searchCity = 'Abidjan';
   PropertyType? _selectedType;
   bool? _furnished;
+  Position? _userLocation;
+  String? _locationError;
+  bool _locationChecked = false;
+
+  Future<void> _fetchLocationThenLoadProperties() async {
+    if (!mounted) return;
+    ref.read(propertyProvider.notifier).loadProperties();
+
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled && mounted) {
+      setState(() {
+        _locationError = 'Localisation désactivée';
+        _locationChecked = true;
+      });
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.deniedForever && mounted) {
+      setState(() {
+        _locationError = 'Accès à la position refusé';
+        _locationChecked = true;
+      });
+      return;
+    }
+    if (permission == LocationPermission.denied && mounted) {
+      setState(() {
+        _locationError = null;
+        _locationChecked = true;
+      });
+      return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _userLocation = position;
+          _locationError = null;
+          _locationChecked = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _userLocation = null;
+          _locationError = 'Position indisponible';
+          _locationChecked = true;
+        });
+      }
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    // Load properties when screen is first displayed
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(propertyProvider.notifier).loadProperties();
-      }
+      if (mounted) _fetchLocationThenLoadProperties();
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Refresh properties when returning to this screen
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(propertyProvider.notifier).loadProperties();
-      }
+      if (mounted) ref.read(propertyProvider.notifier).loadProperties();
     });
   }
 
@@ -57,11 +112,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TravelCI'),
+        title: const Text('SOMO'),
         actions: [
           if (isGuest)
             TextButton.icon(
               onPressed: () {
+                tapFeedback();
                 context.push('/login');
               },
               icon: const Icon(FontAwesomeIcons.rightToBracket),
@@ -74,6 +130,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             IconButton(
               icon: const Icon(FontAwesomeIcons.user),
               onPressed: () {
+                tapFeedback();
                 ref.read(authProvider.notifier).logout();
                 context.go('/');
               },
@@ -84,6 +141,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: RefreshIndicator(
         onRefresh: () async {
           await ref.read(propertyProvider.notifier).loadProperties();
+          _fetchLocationThenLoadProperties();
         },
         child: Column(
           children: [
@@ -99,6 +157,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       suffixIcon: IconButton(
                         icon: const Icon(FontAwesomeIcons.sliders),
                         onPressed: () {
+                          tapFeedback();
                           context.push('/search');
                         },
                       ),
@@ -123,6 +182,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           label: const Text('Appartement'),
                           selected: _selectedType == PropertyType.apartment,
                           onSelected: (selected) {
+                            tapFeedback();
                             setState(() {
                               _selectedType = selected ? PropertyType.apartment : null;
                             });
@@ -135,6 +195,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           label: const Text('Villa'),
                           selected: _selectedType == PropertyType.villa,
                           onSelected: (selected) {
+                            tapFeedback();
                             setState(() {
                               _selectedType = selected ? PropertyType.villa : null;
                             });
@@ -146,6 +207,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         label: const Text('Meublé'),
                         selected: _furnished == true,
                         onSelected: (selected) {
+                          tapFeedback();
                           setState(() {
                             _furnished = selected ? true : null;
                           });
@@ -153,6 +215,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ],
                   ),
+                  if (_userLocation != null && filteredProperties.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(FontAwesomeIcons.locationDot, size: 14, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Triés par proximité',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -210,6 +289,7 @@ class _PropertyCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
+          tapFeedback();
           context.push('/property/${property.id}');
         },
         child: Column(
@@ -281,10 +361,25 @@ class _PropertyCard extends StatelessWidget {
                     children: [
                       Icon(FontAwesomeIcons.locationDot, size: 16, color: Colors.grey[600]),
                       const SizedBox(width: 4),
-                      Text(
-                        '${property.city}, ${property.address}',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      Expanded(
+                        child: Text(
+                          '${property.city}, ${property.address}',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      if (property.roomCount != null)
+                        Text(
+                          property.roomCount == 1
+                              ? 'Studio'
+                              : '${property.roomCount} pièces',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),
