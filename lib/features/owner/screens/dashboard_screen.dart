@@ -29,24 +29,12 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Load properties, bookings, and refresh user (for profile/ID images) when dashboard is opened
+    // Single load when dashboard opens; use pull-to-refresh to refresh (reduces API rate)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(propertyProvider.notifier).loadProperties();
         ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
         ref.read(authProvider.notifier).refreshUser();
-      }
-    });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Refresh properties and bookings when returning to this screen
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(propertyProvider.notifier).loadProperties();
-        ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
       }
     });
   }
@@ -100,8 +88,8 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await ref.read(propertyProvider.notifier).loadProperties();
-          await ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
+          await ref.read(propertyProvider.notifier).loadProperties(forceRefresh: true);
+          await ref.read(bookingProvider.notifier).loadBookings(role: 'owner', forceRefresh: true);
         },
         child: Column(
           children: [
@@ -551,24 +539,39 @@ class _PropertyCard extends ConsumerWidget {
                         color: Colors.green,
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton.icon(
+                            icon: const Icon(FontAwesomeIcons.calendarDays, size: 16),
+                            label: const Text('Disponibilité'),
+                            onPressed: () {
+                              tapFeedback();
+                              Navigator.of(context, rootNavigator: true).push(
+                                MaterialPageRoute(
+                                  builder: (context) => PropertyAvailabilityScreen(property: property),
+                                ),
+                              );
+                            },
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(FontAwesomeIcons.pen, size: 16),
+                            label: const Text('Modifier'),
+                            onPressed: () { tapFeedback(); context.push('/owner/property/${property.id}'); },
+                          ),
+                          TextButton.icon(
+                            icon: Icon(FontAwesomeIcons.trash, size: 16, color: Colors.red[700]),
+                            label: Text('Supprimer', style: TextStyle(color: Colors.red[700])),
+                            onPressed: () { tapFeedback(); _showDeleteConfirmation(context, ref); },
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              IconButton(
-                icon: const Icon(FontAwesomeIcons.calendarDays),
-                onPressed: () { tapFeedback(); context.push('/owner/property/${property.id}/availability', extra: property); },
-                tooltip: 'Disponibilité',
-              ),
-              IconButton(
-                icon: const Icon(FontAwesomeIcons.pen),
-                onPressed: () { tapFeedback(); context.push('/owner/property/${property.id}'); },
-                tooltip: 'Modifier',
-              ),
-              IconButton(
-                icon: const Icon(FontAwesomeIcons.trash),
-                onPressed: () { tapFeedback(); _showDeleteConfirmation(context, ref); },
-                tooltip: 'Supprimer',
-                color: Colors.red,
               ),
             ],
           ),

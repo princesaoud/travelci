@@ -294,8 +294,8 @@ class _BookingRequestsScreenState extends ConsumerState<BookingRequestsScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
-          await ref.read(propertyProvider.notifier).loadProperties();
+          await ref.read(bookingProvider.notifier).loadBookings(role: 'owner', forceRefresh: true);
+          await ref.read(propertyProvider.notifier).loadProperties(forceRefresh: true);
         },
         child: ownerBookings.isEmpty
             ? SingleChildScrollView(

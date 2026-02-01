@@ -5,12 +5,16 @@ import 'package:travelci/core/models/api_response.dart';
 import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/services/property_service.dart';
 
+/// Minimum time between property list API calls (throttle to reduce rate limits).
+const Duration _propertyLoadThrottle = Duration(seconds: 30);
+
 class PropertyState {
   final List<Property> properties;
   final bool isLoading;
   final String? error;
   final PaginationInfo? pagination;
   final Map<String, Property> propertyCache; // Cache for individual properties
+  final DateTime? lastLoadedAt;
 
   const PropertyState({
     this.properties = const [],
@@ -18,6 +22,7 @@ class PropertyState {
     this.error,
     this.pagination,
     this.propertyCache = const {},
+    this.lastLoadedAt,
   });
 
   PropertyState copyWith({
@@ -26,6 +31,7 @@ class PropertyState {
     String? error,
     PaginationInfo? pagination,
     Map<String, Property>? propertyCache,
+    DateTime? lastLoadedAt,
   }) {
     return PropertyState(
       properties: properties ?? this.properties,
@@ -33,6 +39,7 @@ class PropertyState {
       error: error,
       pagination: pagination ?? this.pagination,
       propertyCache: propertyCache ?? this.propertyCache,
+      lastLoadedAt: lastLoadedAt ?? this.lastLoadedAt,
     );
   }
 
@@ -47,12 +54,10 @@ class PropertyState {
 class PropertyNotifier extends StateNotifier<PropertyState> {
   final PropertyService _propertyService;
 
-  PropertyNotifier(this._propertyService) : super(PropertyState()) {
-    // Load properties on initialization
-    loadProperties();
-  }
+  PropertyNotifier(this._propertyService) : super(PropertyState());
 
-  /// Load properties from API
+  /// Load properties from API.
+  /// [forceRefresh] bypasses throttle (e.g. for pull-to-refresh).
   Future<void> loadProperties({
     String? city,
     PropertyType? type,
@@ -60,7 +65,13 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
     double? priceMin,
     double? priceMax,
     int page = 1,
+    bool forceRefresh = false,
   }) async {
+    if (!forceRefresh &&
+        state.lastLoadedAt != null &&
+        DateTime.now().difference(state.lastLoadedAt!) < _propertyLoadThrottle) {
+      return;
+    }
     state = state.copyWith(isLoading: true, error: null);
 
     try {
@@ -82,6 +93,7 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
         isLoading: false,
         pagination: response.pagination,
         error: null,
+        lastLoadedAt: DateTime.now(),
       );
     } catch (e) {
       state = state.copyWith(
@@ -309,9 +321,9 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
     }
   }
 
-  /// Refresh properties
+  /// Refresh properties (always fetches from API)
   Future<void> refresh() async {
-    await loadProperties();
+    await loadProperties(forceRefresh: true);
   }
 }
 

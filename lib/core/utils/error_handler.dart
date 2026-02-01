@@ -95,5 +95,10 @@ class ApiErrorHandler {
   static bool isAuthenticationError(DioException error) {
     return error.response?.statusCode == 401;
   }
+
+  /// Check if error is rate limit (429 Too Many Requests)
+  static bool isRateLimitError(DioException error) {
+    return error.response?.statusCode == 429;
+  }
 }
 

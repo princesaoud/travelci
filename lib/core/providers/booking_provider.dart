@@ -3,26 +3,33 @@ import 'package:travelci/core/models/booking.dart';
 import 'package:travelci/core/models/user.dart';
 import 'package:travelci/core/services/booking_service.dart';
 
+/// Minimum time between booking list API calls (throttle to reduce rate limits).
+const Duration _bookingLoadThrottle = Duration(seconds: 30);
+
 class BookingState {
   final List<Booking> bookings;
   final bool isLoading;
   final String? error;
+  final DateTime? lastLoadedAt;
 
   const BookingState({
     this.bookings = const [],
     this.isLoading = false,
     this.error,
+    this.lastLoadedAt,
   });
 
   BookingState copyWith({
     List<Booking>? bookings,
     bool? isLoading,
     String? error,
+    DateTime? lastLoadedAt,
   }) {
     return BookingState(
       bookings: bookings ?? this.bookings,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      lastLoadedAt: lastLoadedAt ?? this.lastLoadedAt,
     );
   }
 }
@@ -32,10 +39,15 @@ class BookingNotifier extends StateNotifier<BookingState> {
 
   BookingNotifier(this._bookingService) : super(BookingState());
 
-  /// Load bookings for current user
-  /// 
-  /// [role] can be 'client' or 'owner' to filter bookings
-  Future<void> loadBookings({String? role}) async {
+  /// Load bookings for current user.
+  /// [role] can be 'client' or 'owner' to filter bookings.
+  /// [forceRefresh] bypasses throttle (e.g. for pull-to-refresh).
+  Future<void> loadBookings({String? role, bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        state.lastLoadedAt != null &&
+        DateTime.now().difference(state.lastLoadedAt!) < _bookingLoadThrottle) {
+      return;
+    }
     state = state.copyWith(isLoading: true, error: null);
 
     try {
@@ -44,6 +56,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
         bookings: bookings,
         isLoading: false,
         error: null,
+        lastLoadedAt: DateTime.now(),
       );
     } catch (e) {
       state = state.copyWith(
@@ -161,9 +174,9 @@ class BookingNotifier extends StateNotifier<BookingState> {
     }
   }
 
-  /// Refresh bookings
+  /// Refresh bookings (always fetches from API)
   Future<void> refresh({String? role}) async {
-    await loadBookings(role: role);
+    await loadBookings(role: role, forceRefresh: true);
   }
 }
 

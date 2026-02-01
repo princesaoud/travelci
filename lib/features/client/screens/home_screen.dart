@@ -89,14 +89,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.read(propertyProvider.notifier).loadProperties();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     // Watch property state to get reactive updates
     final propertyState = ref.watch(propertyProvider);
@@ -140,7 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await ref.read(propertyProvider.notifier).loadProperties();
+          await ref.read(propertyProvider.notifier).loadProperties(forceRefresh: true);
           _fetchLocationThenLoadProperties();
         },
         child: Column(

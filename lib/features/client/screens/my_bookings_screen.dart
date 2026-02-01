@@ -306,7 +306,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
       // Reload bookings to get updated list
       final user = ref.read(authProvider).user;
       if (user != null) {
-        await ref.read(bookingProvider.notifier).loadBookings(role: 'client');
+        await ref.read(bookingProvider.notifier).loadBookings(role: 'client', forceRefresh: true);
       }
 
       // Show success message

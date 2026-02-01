@@ -45,9 +45,16 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
       }
     } catch (e) {
       if (mounted) {
+        // 404 or API not deployed: show calendar with empty blocked list so screen is still usable
         setState(() {
-          _error = e.toString().replaceFirst('Exception: ', '');
+          _blockedDates.clear();
           _isLoading = false;
+          final msg = e.toString().toLowerCase();
+          if (msg.contains('404') || msg.contains('not found')) {
+            _error = null; // Don't block the UI
+          } else {
+            _error = e.toString().replaceFirst('Exception: ', '');
+          }
         });
       }
     }

@@ -36,7 +36,34 @@ class ApiService {
           return handler.next(options);
         },
         onError: (error, handler) {
-          // Handle errors globally if needed
+          return handler.next(error);
+        },
+      ),
+    );
+
+    // Retry on 429 (Too Many Requests) with backoff
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onError: (DioException error, ErrorInterceptorHandler handler) async {
+          final statusCode = error.response?.statusCode;
+          if (statusCode == 429) {
+            final retryCount = (error.requestOptions.extra['retry_429'] as int?) ?? 0;
+            const maxRetries = 1;
+            if (retryCount < maxRetries) {
+              final retryAfterHeader = error.response?.headers.value('Retry-After');
+              final seconds = retryAfterHeader != null ? int.tryParse(retryAfterHeader) : null;
+              final delay = Duration(seconds: seconds ?? 2);
+              developer.log('[API] 429 Too Many Requests – retrying in ${delay.inSeconds}s (attempt ${retryCount + 1}/$maxRetries)');
+              await Future<void>.delayed(delay);
+              error.requestOptions.extra['retry_429'] = retryCount + 1;
+              try {
+                final response = await _dio.fetch(error.requestOptions);
+                return handler.resolve(response);
+              } catch (e) {
+                return handler.next(error);
+              }
+            }
+          }
           return handler.next(error);
         },
       ),
@@ -89,7 +116,11 @@ class ApiService {
       );
       return handleApiResponse(response, parser);
     } on DioException catch (e) {
+      final status = e.response?.statusCode;
       developer.log('[API] GET DioException Type: ${e.type}');
+      if (status != null) {
+        developer.log('[API] GET Response: $status ${status == 429 ? "(Too Many Requests – rate limit)" : ""}');
+      }
       developer.log('[API] GET Error Message: ${e.message}');
       developer.log('[API] GET Request URL: ${e.requestOptions.uri}');
       throw Exception(ApiErrorHandler.getErrorMessage(e));
@@ -123,12 +154,14 @@ class ApiService {
       developer.log('[API] POST Response Status: ${response.statusCode}');
       return handleApiResponse(response, parser);
     } on DioException catch (e) {
-      // Log detailed error information
+      final status = e.response?.statusCode;
       developer.log('[API] POST DioException Type: ${e.type}');
+      if (status != null) {
+        developer.log('[API] POST Response: $status ${status == 429 ? "(Too Many Requests – rate limit)" : ""}');
+      }
       developer.log('[API] POST Error Message: ${e.message}');
       developer.log('[API] POST Request URL: ${e.requestOptions.uri}');
       if (e.response != null) {
-        developer.log('[API] POST Response Status: ${e.response?.statusCode}');
         developer.log('[API] POST Response Data: ${e.response?.data}');
       } else {
         developer.log('[API] POST No response received - connection error');
