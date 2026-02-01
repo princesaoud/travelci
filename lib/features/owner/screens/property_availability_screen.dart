@@ -50,8 +50,11 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
           _blockedDates.clear();
           _isLoading = false;
           final msg = e.toString().toLowerCase();
-          if (msg.contains('404') || msg.contains('not found')) {
-            _error = null; // Don't block the UI
+          if (msg.contains('404') ||
+              msg.contains('not found') ||
+              msg.contains('non trouvée') ||
+              msg.contains('route non trouvée')) {
+            _error = null; // Route not implemented: show calendar with no blocked dates
           } else {
             _error = e.toString().replaceFirst('Exception: ', '');
           }
