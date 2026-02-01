@@ -9,6 +9,7 @@ import 'package:travelci/core/models/booking.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
+import 'package:travelci/core/services/availability_service.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/providers/chat_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
@@ -418,12 +419,22 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
   late TextEditingController _localMessageController;
   bool _isLoading = false;
   List<Booking> _propertyBookings = [];
+  Set<String> _blockedDates = {};
   bool _loadingBookings = true;
+  final AvailabilityService _availabilityService = AvailabilityService();
 
   // Helper pour normaliser les dates (sans heure)
   DateTime _normalizeDate(DateTime date) {
     return DateTime(date.year, date.month, date.day);
   }
+
+  String _dateKey(DateTime date) {
+    final d = _normalizeDate(date);
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
+  // Check if a date is blocked by owner (unavailable)
+  bool _isDateBlocked(DateTime date) => _blockedDates.contains(_dateKey(date));
 
   // Check if a date is booked (within any accepted or pending booking)
   bool _isDateBooked(DateTime date) {
@@ -467,22 +478,17 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
     try {
       final bookingService = ref.read(bookingServiceProvider);
       final bookings = await bookingService.getPropertyBookings(widget.property.id);
-      if (mounted) {
-        setState(() {
-          _propertyBookings = bookings;
-          _loadingBookings = false;
-        });
-      }
+      if (mounted) setState(() => _propertyBookings = bookings);
     } catch (e) {
-      // If loading fails, just continue without blocking dates
-      // This is not critical for the booking flow
       print('[BookingSheet] Error loading property bookings: $e');
-      if (mounted) {
-        setState(() {
-          _loadingBookings = false;
-        });
-      }
     }
+    try {
+      final dates = await _availabilityService.getBlockedDates(widget.property.id);
+      if (mounted) setState(() => _blockedDates = Set<String>.from(dates));
+    } catch (e) {
+      print('[BookingSheet] Error loading blocked dates: $e');
+    }
+    if (mounted) setState(() => _loadingBookings = false);
   }
 
   @override
@@ -552,7 +558,8 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
               child: Opacity(
                 opacity: _isLoading ? 0.5 : 1.0,
                 child: TableCalendar(
-              key: ValueKey('${widget.startDate}_${widget.endDate}_${_propertyBookings.length}'),
+              // Key without start/end so calendar isn't recreated on each tap (avoids extra "highlight" tap)
+              key: ValueKey('${_propertyBookings.length}_${_blockedDates.length}'),
               firstDay: DateTime.now(),
               lastDay: DateTime.now().add(const Duration(days: 365)),
               focusedDay: _focusedDay,
@@ -575,17 +582,18 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
               rangeStartDay: widget.startDate != null ? _normalizeDate(widget.startDate!) : null,
               rangeEndDay: widget.endDate != null ? _normalizeDate(widget.endDate!) : null,
               rangeSelectionMode: RangeSelectionMode.toggledOn,
-              // Disable booked dates
+              // Disable past, booked and blocked dates
               enabledDayPredicate: (day) {
                 final normalizedDay = _normalizeDate(day);
                 final today = _normalizeDate(DateTime.now());
-                // Disable past dates and booked dates
-                return !normalizedDay.isBefore(today) && !_isDateBooked(day);
+                return !normalizedDay.isBefore(today) &&
+                    !_isDateBooked(day) &&
+                    !_isDateBlocked(day);
               },
-              // Style booked dates in grey
+              // Style booked and blocked dates in grey
               calendarBuilders: CalendarBuilders(
                 defaultBuilder: (context, date, _) {
-                  if (_isDateBooked(date)) {
+                  if (_isDateBooked(date) || _isDateBlocked(date)) {
                     return Container(
                       margin: const EdgeInsets.all(4.0),
                       decoration: BoxDecoration(
@@ -606,7 +614,7 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
                   return null;
                 },
                 todayBuilder: (context, date, _) {
-                  if (_isDateBooked(date)) {
+                  if (_isDateBooked(date) || _isDateBlocked(date)) {
                     return Container(
                       margin: const EdgeInsets.all(4.0),
                       decoration: BoxDecoration(
@@ -629,7 +637,7 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
                   return null;
                 },
                 outsideBuilder: (context, date, _) {
-                  if (_isDateBooked(date)) {
+                  if (_isDateBooked(date) || _isDateBlocked(date)) {
                     return Container(
                       margin: const EdgeInsets.all(4.0),
                       decoration: BoxDecoration(
@@ -661,14 +669,21 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
                 
                 // Vérifier que la date sélectionnée n'est pas dans le passé
                 if (normalizedSelected.isBefore(today)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Ce jour n\'est pas disponible pour la réservation.'),
+                      backgroundColor: Colors.orange,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
                   return;
                 }
                 
-                // Vérifier que la date n'est pas réservée
-                if (_isDateBooked(selectedDay)) {
+                // Vérifier que la date n'est pas réservée ou bloquée
+                if (_isDateBooked(selectedDay) || _isDateBlocked(selectedDay)) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Cette date est déjà réservée'),
+                      content: Text('Ce jour n\'est pas disponible pour la réservation.'),
                       backgroundColor: Colors.orange,
                       duration: Duration(seconds: 2),
                     ),
@@ -703,34 +718,53 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
                     _focusedDay = focusedDay;
                   });
                 }
-                // Validate range doesn't include booked dates
-                if (start != null && end != null) {
-                  var current = start;
-                  bool hasBookedDate = false;
-                  while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
-                    if (_isDateBooked(current)) {
-                      hasBookedDate = true;
-                      break;
-                    }
-                    current = current.add(const Duration(days: 1));
-                  }
-                  
-                  if (hasBookedDate) {
+                // First tap: start set, end null → select start immediately (no extra tap)
+                if (start != null) {
+                  final normalizedStart = _normalizeDate(start);
+                  if (normalizedStart.isBefore(_normalizeDate(DateTime.now()))) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('La période sélectionnée contient des dates déjà réservées'),
+                        content: Text('Ce jour n\'est pas disponible pour la réservation.'),
                         backgroundColor: Colors.orange,
                         duration: Duration(seconds: 2),
                       ),
                     );
                     return;
                   }
+                  if (_isDateBooked(start) || _isDateBlocked(start)) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Ce jour n\'est pas disponible pour la réservation.'),
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+                  widget.onStartDateSelected(normalizedStart);
                 }
-                
-                if (start != null) {
+                // Second tap: both set → validate range and set both (so one callback with full range works)
+                if (end != null && start != null) {
+                  var current = start;
+                  bool hasUnavailableDate = false;
+                  while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
+                    if (_isDateBooked(current) || _isDateBlocked(current)) {
+                      hasUnavailableDate = true;
+                      break;
+                    }
+                    current = current.add(const Duration(days: 1));
+                  }
+                  if (hasUnavailableDate) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Ce jour n\'est pas disponible pour la réservation.'),
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
                   widget.onStartDateSelected(_normalizeDate(start));
-                }
-                if (end != null) {
                   widget.onEndDateSelected(_normalizeDate(end));
                 }
               },
@@ -747,6 +781,59 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
                 ),
               ),
             ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Indisponible',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 24),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Disponible',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           AbsorbPointer(
