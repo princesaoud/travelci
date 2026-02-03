@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:travelci/core/models/booking.dart';
 import 'package:travelci/core/models/property.dart';
+import 'package:travelci/core/providers/booking_provider.dart';
 import 'package:travelci/core/services/availability_service.dart';
 import 'package:travelci/core/utils/feedback.dart';
 
@@ -19,6 +21,8 @@ class PropertyAvailabilityScreen extends ConsumerStatefulWidget {
 class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilityScreen> {
   final AvailabilityService _availabilityService = AvailabilityService();
   final Set<String> _blockedDates = {};
+  /// Dates that fall within an accepted (confirmed) booking for this property.
+  final Set<String> _bookedDates = {};
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   bool _isLoading = true;
@@ -29,38 +33,58 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 
+  /// Fill _bookedDates from accepted bookings (each day in [start, end] inclusive).
+  void _fillBookedDatesFromBookings(List<Booking> bookings) {
+    _bookedDates.clear();
+    final accepted = bookings.where((b) => b.status == BookingStatus.accepted).toList();
+    for (final b in accepted) {
+      var d = DateTime(b.startDate.year, b.startDate.month, b.startDate.day);
+      final end = DateTime(b.endDate.year, b.endDate.month, b.endDate.day);
+      while (!d.isAfter(end)) {
+        _bookedDates.add(_dateKey(d));
+        d = d.add(const Duration(days: 1));
+      }
+    }
+  }
+
   Future<void> _loadBlockedDates() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
+    String? loadError;
     try {
       final dates = await _availabilityService.getBlockedDates(widget.property.id);
       if (mounted) {
         setState(() {
           _blockedDates.clear();
           _blockedDates.addAll(dates);
-          _isLoading = false;
-          _error = null; // Success: show calendar (all dates free when dates is empty)
         });
       }
     } catch (e) {
-      if (mounted) {
-        // 404 or API not deployed: show calendar with empty blocked list so screen is still usable
-        setState(() {
-          _blockedDates.clear();
-          _isLoading = false;
-          final msg = e.toString().toLowerCase();
-          if (msg.contains('404') ||
-              msg.contains('not found') ||
-              msg.contains('non trouvée') ||
-              msg.contains('route non trouvée')) {
-            _error = null; // Route not implemented: show calendar with no blocked dates
-          } else {
-            _error = e.toString().replaceFirst('Exception: ', '');
-          }
-        });
+      final msg = e.toString().toLowerCase();
+      if (!msg.contains('404') &&
+          !msg.contains('not found') &&
+          !msg.contains('non trouvée') &&
+          !msg.contains('route non trouvée')) {
+        loadError = e.toString().replaceFirst('Exception: ', '');
       }
+      if (mounted) setState(() => _blockedDates.clear());
+    }
+    try {
+      final bookingService = ref.read(bookingServiceProvider);
+      final bookings = await bookingService.getPropertyBookings(widget.property.id);
+      if (mounted) {
+        setState(() => _fillBookedDatesFromBookings(bookings));
+      }
+    } catch (_) {
+      if (mounted) setState(() => _bookedDates.clear());
+    }
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _error = loadError;
+      });
     }
   }
 
@@ -70,6 +94,16 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
     if (_isSaving) return;
 
     final key = _dateKey(day);
+    if (_bookedDates.contains(key)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cette date a une réservation confirmée et ne peut pas être modifiée.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -185,22 +219,46 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
                         ),
                         eventLoader: (day) {
                           final key = _dateKey(day);
-                          return _blockedDates.contains(key) ? ['blocked'] : [];
+                          if (_bookedDates.contains(key)) return ['booked'];
+                          if (_blockedDates.contains(key)) return ['blocked'];
+                          return [];
                         },
                       ),
                       const SizedBox(height: 24),
-                      Row(
+                      Wrap(
+                        spacing: 24,
+                        runSpacing: 8,
                         children: [
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('Indisponible (bloqué par vous)'),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          const Text('Indisponible (bloqué par vous)'),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('Réservation confirmée'),
+                            ],
+                          ),
                         ],
                       ),
                       if (_isSaving)
@@ -217,13 +275,25 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
   Widget _buildDay(BuildContext context, DateTime day, bool isSelected, {bool isToday = false}) {
     final key = _dateKey(day);
     final isBlocked = _blockedDates.contains(key);
+    final isBooked = _bookedDates.contains(key);
     final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
     final isPast = day.isBefore(today);
+
+    Color? bgColor;
+    Color? textColor;
+    if (isBooked) {
+      bgColor = Colors.blue.withOpacity(0.4);
+      textColor = Colors.blue[900];
+    } else if (isBlocked) {
+      bgColor = Colors.red.withOpacity(0.4);
+      textColor = Colors.red[900];
+    }
+    if (isPast) textColor = Colors.grey;
 
     return Container(
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isBlocked ? Colors.red.withOpacity(0.4) : null,
+        color: bgColor,
         borderRadius: BorderRadius.circular(8),
         border: isToday ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2) : null,
       ),
@@ -231,7 +301,7 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
         child: Text(
           '${day.day}',
           style: TextStyle(
-            color: isPast ? Colors.grey : (isBlocked ? Colors.red[900] : null),
+            color: textColor,
             fontWeight: isToday ? FontWeight.bold : null,
           ),
         ),

@@ -26,16 +26,19 @@ class OwnerDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
+  /// Initial load runs once when dashboard first appears. Property/booking API calls
+  /// do not touch auth, so they never recreate the router or close child screens
+  /// (Disponibilité, edit). Only auth changes do that, and we don't call refreshUser() here.
+  bool _initialLoadDone = false;
+
   @override
   void initState() {
     super.initState();
-    // Single load when dashboard opens; use pull-to-refresh to refresh (reduces API rate)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(propertyProvider.notifier).loadProperties();
-        ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
-        ref.read(authProvider.notifier).refreshUser();
-      }
+      if (!mounted || _initialLoadDone) return;
+      _initialLoadDone = true;
+      ref.read(propertyProvider.notifier).loadProperties();
+      ref.read(bookingProvider.notifier).loadBookings(role: 'owner');
     });
   }
 
@@ -90,6 +93,7 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
         onRefresh: () async {
           await ref.read(propertyProvider.notifier).loadProperties(forceRefresh: true);
           await ref.read(bookingProvider.notifier).loadBookings(role: 'owner', forceRefresh: true);
+          await ref.read(authProvider.notifier).refreshUser(); // Refresh profile (e.g. national ID images)
         },
         child: Column(
           children: [

@@ -20,18 +20,26 @@ import 'package:travelci/features/owner/screens/property_form_screen.dart';
 import 'package:travelci/features/owner/screens/property_availability_screen.dart';
 import 'package:travelci/core/models/property.dart';
 
+/// Notifier used to re-run router redirect when auth changes, without recreating the router.
+/// This keeps the navigation stack (e.g. Disponibilité, edit view) from closing when /me runs.
+class _RouterRefreshNotifier extends ChangeNotifier {}
+
+final _routerRefreshNotifier = _RouterRefreshNotifier();
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  // Only auth is listened to. Property/booking API calls never recreate the router or close child screens.
+  ref.listen(authProvider, (_, __) {
+    _routerRefreshNotifier.notifyListeners();
+  });
 
   return GoRouter(
     initialLocation: '/login',
+    refreshListenable: _routerRefreshNotifier,
     redirect: (context, state) {
+      final authState = ref.read(authProvider);
       final isAuthenticated = authState.user != null;
       final isLoginRoute = state.matchedLocation == '/login' || state.matchedLocation == '/register';
-      
-      // Debug log
-      print('[Router Redirect] Location: ${state.matchedLocation}, Authenticated: $isAuthenticated, User: ${authState.user?.email}, Role: ${authState.user?.role}, Error: ${authState.error}, Loading: ${authState.isLoading}');
-      
+
       // Routes that require authentication
       final requiresAuth = [
         '/bookings',
@@ -43,28 +51,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       final requiresAuthRoute = requiresAuth.contains(state.matchedLocation) || 
                                 (isOwnerRoute && state.matchedLocation != '/owner');
 
-      // Redirect to login if trying to access protected route without auth
       if (!isAuthenticated && requiresAuthRoute && !isLoginRoute) {
-        print('[Router Redirect] Redirecting to /login (not authenticated)');
         return '/login';
       }
-
-      // IMPORTANT: Redirect authenticated users from login/register to home
-      // But only if there's NO error and NOT loading
       if (isAuthenticated && isLoginRoute && authState.error == null && !authState.isLoading) {
-        // User is authenticated and no error - redirect to home
-        // The screen will show success message before this redirect happens
-        print('[Router Redirect] Redirecting authenticated user from $isLoginRoute to /');
         return '/';
       }
-
-      // Don't redirect if there's an error - user should stay on login page
       if (isLoginRoute && authState.error != null) {
-        print('[Router Redirect] Staying on login page (error present)');
-        return null; // Stay on login page to show error
+        return null;
       }
-
-      print('[Router Redirect] No redirect needed');
       return null;
     },
     routes: [
@@ -76,29 +71,24 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
       ),
-      // Client routes with bottom navigation (accessible to guests)
       ShellRoute(
         builder: (context, state, child) {
-          final user = authState.user;
-          // If user is owner, return child directly (no client navigation wrapper)
-          if (user?.role == UserRole.owner) {
-            return child;
-          }
-          
-          // For clients and guests, wrap with client navigation
-          // Determine index based on route
-          int index = 0;
-          final location = state.matchedLocation;
-          if (location == '/') {
-            index = 0;
-          } else if (location == '/bookings') {
-            index = 1;
-          } else if (location == '/chat') {
-            index = 2;
-          }
-          
-          return ClientNavigationWrapper(
-            initialIndex: index,
+          return Consumer(
+            builder: (context, ref, _) {
+              final user = ref.watch(authProvider).user;
+              if (user?.role == UserRole.owner) {
+                return child;
+              }
+              int index = 0;
+              final location = state.matchedLocation;
+              if (location == '/') index = 0;
+              else if (location == '/bookings') index = 1;
+              else if (location == '/chat') index = 2;
+              return ClientNavigationWrapper(
+                initialIndex: index,
+                child: child,
+              );
+            },
             child: child,
           );
         },
@@ -106,48 +96,58 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/',
             builder: (context, state) {
-              final user = authState.user;
-              // Debug log
-              print('[Router] Building / route - User: ${user?.email}, Role: ${user?.role}');
-              if (user?.role == UserRole.owner) {
-                print('[Router] Returning OwnerDashboardScreen');
-                return const OwnerDashboardScreen();
-              }
-              print('[Router] Returning HomeScreen');
-              return const HomeScreen();
+              return Consumer(
+                builder: (context, ref, _) {
+                  final user = ref.watch(authProvider).user;
+                  if (user?.role == UserRole.owner) {
+                    return const OwnerDashboardScreen();
+                  }
+                  return const HomeScreen();
+                },
+              );
             },
           ),
-          // Protected routes - require authentication
           GoRoute(
             path: '/bookings',
             builder: (context, state) {
-              if (authState.user == null) {
-                return const HomeScreen(); // Will redirect via redirect logic
-              }
-              return const MyBookingsScreen();
+              return Consumer(
+                builder: (context, ref, _) {
+                  if (ref.watch(authProvider).user == null) {
+                    return const HomeScreen();
+                  }
+                  return const MyBookingsScreen();
+                },
+              );
             },
           ),
           GoRoute(
             path: '/chat',
             builder: (context, state) {
-              if (authState.user == null) {
-                return const HomeScreen(); // Will redirect via redirect logic
-              }
-              return const ConversationsListScreen();
+              return Consumer(
+                builder: (context, ref, _) {
+                  if (ref.watch(authProvider).user == null) {
+                    return const HomeScreen();
+                  }
+                  return const ConversationsListScreen();
+                },
+              );
             },
           ),
           GoRoute(
             path: '/chat/:id',
             builder: (context, state) {
-              if (authState.user == null) {
-                return const HomeScreen(); // Will redirect via redirect logic
-              }
-              final conversation = state.extra as Conversation?;
-              if (conversation == null) {
-                // If no conversation passed, try to get from state
-                return const ConversationsListScreen();
-              }
-              return ChatDetailScreen(conversation: conversation);
+              return Consumer(
+                builder: (context, ref, _) {
+                  if (ref.watch(authProvider).user == null) {
+                    return const HomeScreen();
+                  }
+                  final conversation = state.extra as Conversation?;
+                  if (conversation == null) {
+                    return const ConversationsListScreen();
+                  }
+                  return ChatDetailScreen(conversation: conversation);
+                },
+              );
             },
           ),
         ],

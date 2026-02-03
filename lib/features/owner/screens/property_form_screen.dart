@@ -430,6 +430,7 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             const SizedBox(height: 16),
             DropdownButtonFormField<PropertyType>(
               value: _selectedType,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Type',
                 border: OutlineInputBorder(),
@@ -465,18 +466,19 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
             const SizedBox(height: 16),
             DropdownButtonFormField<int>(
               value: _roomCount,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Nombre de pièces',
                 border: OutlineInputBorder(),
                 hintText: 'Ex: 1 = studio, 2 = 2 pièces (1 chambre + séjour)',
               ),
               items: const [
-                DropdownMenuItem(value: 1, child: Text('1 pièce (Studio)')),
-                DropdownMenuItem(value: 2, child: Text('2 pièces (1 chambre + séjour)')),
+                DropdownMenuItem(value: 1, child: Text('1 pièce (Studio)', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 2, child: Text('2 pièces (1 chambre + séjour)', overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: 3, child: Text('3 pièces')),
                 DropdownMenuItem(value: 4, child: Text('4 pièces')),
                 DropdownMenuItem(value: 5, child: Text('5 pièces')),
-                DropdownMenuItem(value: 6, child: Text('6 pièces et plus')),
+                DropdownMenuItem(value: 6, child: Text('6 pièces et plus', overflow: TextOverflow.ellipsis)),
               ],
               onChanged: _isLoading ? null : (value) {
                 if (value != null) {
