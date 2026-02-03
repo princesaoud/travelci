@@ -206,6 +206,7 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
                         focusedDay: _focusedDay,
                         selectedDayPredicate: (day) => _selectedDay != null && isSameDay(_selectedDay, day),
                         calendarFormat: CalendarFormat.month,
+                        headerStyle: const HeaderStyle(formatButtonVisible: false),
                         onDaySelected: (selected, focused) {
                           _selectedDay = selected;
                           _focusedDay = focused;
