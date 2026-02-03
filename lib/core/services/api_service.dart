@@ -24,18 +24,22 @@ class ApiService {
       ),
     );
 
-    // Add interceptor to include auth token
+    // Add interceptor to include auth token on every request
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          // Add auth token if available
           final token = await TokenManager.getToken();
-          if (token != null) {
+          if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
           return handler.next(options);
         },
-        onError: (error, handler) {
+        onError: (error, handler) async {
+          // On 401 (token missing/invalid), clear stored token so UI can show login
+          if (error.response?.statusCode == 401) {
+            await TokenManager.clearToken();
+            developer.log('[API] 401 Unauthorized – token cleared');
+          }
           return handler.next(error);
         },
       ),
@@ -114,15 +118,15 @@ class ApiService {
         queryParameters: queryParameters,
         options: options,
       );
+      developer.log('[API] GET Response: ${response.statusCode} ${response.requestOptions.uri}');
+      developer.log('[API] GET Response data: ${response.data}');
       return handleApiResponse(response, parser);
     } on DioException catch (e) {
       final status = e.response?.statusCode;
       developer.log('[API] GET DioException Type: ${e.type}');
-      if (status != null) {
-        developer.log('[API] GET Response: $status ${status == 429 ? "(Too Many Requests – rate limit)" : ""}');
-      }
+      developer.log('[API] GET Response: $status ${e.requestOptions.uri}');
+      developer.log('[API] GET Response data: ${e.response?.data}');
       developer.log('[API] GET Error Message: ${e.message}');
-      developer.log('[API] GET Request URL: ${e.requestOptions.uri}');
       throw Exception(ApiErrorHandler.getErrorMessage(e));
     } catch (e) {
       developer.log('[API] GET Unexpected error: $e');
@@ -151,21 +155,15 @@ class ApiService {
         queryParameters: queryParameters,
         options: options,
       );
-      developer.log('[API] POST Response Status: ${response.statusCode}');
+      developer.log('[API] POST Response: ${response.statusCode} ${response.requestOptions.uri}');
+      developer.log('[API] POST Response data: ${response.data}');
       return handleApiResponse(response, parser);
     } on DioException catch (e) {
       final status = e.response?.statusCode;
       developer.log('[API] POST DioException Type: ${e.type}');
-      if (status != null) {
-        developer.log('[API] POST Response: $status ${status == 429 ? "(Too Many Requests – rate limit)" : ""}');
-      }
+      developer.log('[API] POST Response: $status ${e.requestOptions.uri}');
+      developer.log('[API] POST Response data: ${e.response?.data}');
       developer.log('[API] POST Error Message: ${e.message}');
-      developer.log('[API] POST Request URL: ${e.requestOptions.uri}');
-      if (e.response != null) {
-        developer.log('[API] POST Response Data: ${e.response?.data}');
-      } else {
-        developer.log('[API] POST No response received - connection error');
-      }
       throw Exception(ApiErrorHandler.getErrorMessage(e));
     } catch (e) {
       developer.log('[API] POST Unexpected error: $e');
@@ -188,8 +186,12 @@ class ApiService {
         queryParameters: queryParameters,
         options: options,
       );
+      developer.log('[API] PUT Response: ${response.statusCode} ${response.requestOptions.uri}');
+      developer.log('[API] PUT Response data: ${response.data}');
       return handleApiResponse(response, parser);
     } on DioException catch (e) {
+      developer.log('[API] PUT Response: ${e.response?.statusCode} ${e.requestOptions.uri}');
+      developer.log('[API] PUT Response data: ${e.response?.data}');
       throw Exception(ApiErrorHandler.getErrorMessage(e));
     }
   }
@@ -209,8 +211,12 @@ class ApiService {
         queryParameters: queryParameters,
         options: options,
       );
+      developer.log('[API] DELETE Response: ${response.statusCode} ${response.requestOptions.uri}');
+      developer.log('[API] DELETE Response data: ${response.data}');
       return handleApiResponse(response, parser);
     } on DioException catch (e) {
+      developer.log('[API] DELETE Response: ${e.response?.statusCode} ${e.requestOptions.uri}');
+      developer.log('[API] DELETE Response data: ${e.response?.data}');
       throw Exception(ApiErrorHandler.getErrorMessage(e));
     }
   }

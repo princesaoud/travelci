@@ -550,11 +550,7 @@ class _PropertyCard extends ConsumerWidget {
                             label: const Text('Disponibilité'),
                             onPressed: () {
                               tapFeedback();
-                              Navigator.of(context, rootNavigator: true).push(
-                                MaterialPageRoute(
-                                  builder: (context) => PropertyAvailabilityScreen(property: property),
-                                ),
-                              );
+                              context.push('/owner/property/${property.id}/availability', extra: property);
                             },
                           ),
                           TextButton.icon(

@@ -6,6 +6,11 @@ import 'package:dio/dio.dart';
 class ApiErrorHandler {
   /// Extract error message from DioException
   static String getErrorMessage(DioException error) {
+    // 401: always show friendly message (token missing or invalid)
+    if (error.response?.statusCode == 401) {
+      return 'Non autorisé. Veuillez vous connecter.';
+    }
+
     // Check if there's a response with error data
     if (error.response != null && error.response!.data != null) {
       final data = error.response!.data;

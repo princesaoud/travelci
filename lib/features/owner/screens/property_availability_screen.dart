@@ -41,6 +41,7 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
           _blockedDates.clear();
           _blockedDates.addAll(dates);
           _isLoading = false;
+          _error = null; // Success: show calendar (all dates free when dates is empty)
         });
       }
     } catch (e) {
@@ -158,6 +159,11 @@ class _PropertyAvailabilityScreenState extends ConsumerState<PropertyAvailabilit
                       Text(
                         'Appuyez sur une date pour la marquer indisponible ou disponible. Les dates passées ne peuvent pas être modifiées.',
                         style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Les dates marquées indisponibles ne pourront pas être réservées par les clients (sauf si déjà réservées).',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
                       ),
                       const SizedBox(height: 16),
                       TableCalendar<String>(

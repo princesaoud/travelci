@@ -550,7 +550,12 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
             'Demander une réservation',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 8),
+          Text(
+            'Les dates grisées sont réservées ou bloquées par le propriétaire et ne peuvent pas être sélectionnées.',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 16),
           SizedBox(
             height: 400,
             child: AbsorbPointer(
@@ -799,7 +804,7 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Indisponible',
+                    'Indisponible (réservé ou bloqué par le propriétaire)',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[700],
@@ -910,6 +915,28 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
                 ? null
                 : () async {
                     tapFeedback();
+                    // Ensure no day in the selected range is booked or owner-blocked (e.g. owner marked busy after client opened sheet)
+                    final start = _normalizeDate(widget.startDate!);
+                    final end = _normalizeDate(widget.endDate!);
+                    var day = start;
+                    while (day.isBefore(end) || day.isAtSameMomentAs(end)) {
+                      if (_isDateBooked(day) || _isDateBlocked(day)) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Une ou plusieurs dates de votre séjour sont indisponibles (réservées ou bloquées par le propriétaire). Veuillez choisir d\'autres dates.',
+                              ),
+                              backgroundColor: Colors.orange,
+                              duration: Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+                      day = day.add(const Duration(days: 1));
+                    }
+
                     setState(() {
                       _isLoading = true;
                     });
