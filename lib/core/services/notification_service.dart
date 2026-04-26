@@ -1,7 +1,12 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:travelci/core/models/notification.dart' as app;
+
+/// Callback invoked when the user taps a notification (local or FCM).
+/// Receives the notification payload (e.g. route string).
+typedef NotificationTapCallback = void Function(String? payload);
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -10,74 +15,93 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
 
   bool _initialized = false;
 
-  /// Initialize notification service
+  /// Registered callback invoked when user taps a notification.
+  NotificationTapCallback? onNotificationTap;
+
+  /// Returns the FCM device token (null if not yet available).
+  Future<String?> getFCMToken() => _fcm.getToken();
+
+  /// Stream of token refreshes — callers should re-register on each new token.
+  Stream<String> get onTokenRefresh => _fcm.onTokenRefresh;
+
   Future<void> initialize() async {
     if (_initialized) return;
 
-    // Initialize timezone
     tz.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Africa/Abidjan')); // Côte d'Ivoire timezone
+    tz.setLocalLocation(tz.getLocation('Africa/Abidjan'));
 
-    // Android initialization settings
+    await _initLocalNotifications();
+    await _initFCM();
+
+    _initialized = true;
+  }
+
+  // ─── Local notifications ───────────────────────────────────────────────────
+
+  Future<void> _initLocalNotifications() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    // iOS initialization settings
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
 
-    // Initialization settings
-    const initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-
-    // Initialize plugin
     await _localNotifications.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
+      const InitializationSettings(android: androidSettings, iOS: iosSettings),
+      onDidReceiveNotificationResponse: (response) {
+        onNotificationTap?.call(response.payload);
+      },
     );
 
-    // Request permissions (iOS)
-    await _requestPermissions();
-
-    _initialized = true;
+    final androidPlugin = _localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.requestNotificationsPermission();
   }
 
-  /// Request notification permissions
-  Future<void> _requestPermissions() async {
-    // Request Android permissions (Android 13+)
-    final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    
-    if (androidPlugin != null) {
-      await androidPlugin.requestNotificationsPermission();
+  // ─── Firebase Cloud Messaging ──────────────────────────────────────────────
+
+  Future<void> _initFCM() async {
+    // Request permission (iOS / Android 13+)
+    await _fcm.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    // Foreground: show a local notification (FCM only shows data payload in foreground)
+    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+    // Background tap: app was in background and user tapped the notification
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      onNotificationTap?.call(_payloadFromFCM(message));
+    });
+
+    // Terminated tap: app was closed and user tapped the notification
+    final initialMessage = await _fcm.getInitialMessage();
+    if (initialMessage != null) {
+      // Slight delay so the router is ready
+      Future.delayed(const Duration(milliseconds: 500), () {
+        onNotificationTap?.call(_payloadFromFCM(initialMessage));
+      });
     }
 
-    // iOS permissions are automatically requested via DarwinInitializationSettings
-    // in the initialize() method, so no need to request them explicitly here
+    // On Android, show heads-up notifications in foreground via local notifications
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
   }
 
-  /// Handle notification tap
-  void _onNotificationTapped(NotificationResponse response) {
-    // This will be handled by the notification provider
-    // to navigate to the appropriate screen
-  }
-
-  /// Show a local notification
-  Future<void> showNotification(
-    app.AppNotification notification, {
-    bool scheduled = false,
-    DateTime? scheduledDate,
-  }) async {
-    if (!_initialized) {
-      await initialize();
-    }
+  /// Shows a local notification when a FCM message arrives in the foreground.
+  Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    final notification = message.notification;
+    if (notification == null) return;
 
     final androidDetails = AndroidNotificationDetails(
       'travelci_channel',
@@ -96,10 +120,55 @@ class NotificationService {
       presentSound: true,
     );
 
-    final details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
+    await _localNotifications.show(
+      message.hashCode,
+      notification.title,
+      notification.body,
+      NotificationDetails(android: androidDetails, iOS: iosDetails),
+      payload: _payloadFromFCM(message),
     );
+  }
+
+  /// Extracts a routing payload from a FCM message data map.
+  String? _payloadFromFCM(RemoteMessage message) {
+    final data = message.data;
+    if (data['type'] == 'message' && data['conversationId'] != null) {
+      return 'chat/${data['conversationId']}';
+    }
+    if (data['bookingId'] != null) {
+      return 'booking/${data['bookingId']}';
+    }
+    return data['route'] as String?;
+  }
+
+  // ─── Local notification helpers ────────────────────────────────────────────
+
+  Future<void> showNotification(
+    app.AppNotification notification, {
+    bool scheduled = false,
+    DateTime? scheduledDate,
+  }) async {
+    if (!_initialized) await initialize();
+
+    final androidDetails = AndroidNotificationDetails(
+      'travelci_channel',
+      'SOMO Notifications',
+      channelDescription: 'Notifications pour les réservations et messages',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+      enableVibration: true,
+      playSound: true,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final details =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
 
     if (scheduled && scheduledDate != null) {
       await _localNotifications.zonedSchedule(
@@ -124,20 +193,16 @@ class NotificationService {
     }
   }
 
-  /// Cancel a notification
   Future<void> cancelNotification(String notificationId) async {
     await _localNotifications.cancel(notificationId.hashCode);
   }
 
-  /// Cancel all notifications
   Future<void> cancelAllNotifications() async {
     await _localNotifications.cancelAll();
   }
 
-  /// Get pending notifications count
   Future<int> getPendingNotificationsCount() async {
     final pending = await _localNotifications.pendingNotificationRequests();
     return pending.length;
   }
 }
-

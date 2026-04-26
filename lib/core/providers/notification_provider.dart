@@ -1,8 +1,8 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:travelci/core/models/notification.dart' as app;
 import 'package:travelci/core/services/notification_service.dart';
-import 'dart:convert';
 
 class NotificationState {
   final List<app.AppNotification> notifications;
@@ -304,7 +304,16 @@ final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService();
 });
 
-final notificationProvider = StateNotifierProvider<NotificationNotifier, NotificationState>((ref) {
+final notificationProvider =
+    StateNotifierProvider<NotificationNotifier, NotificationState>((ref) {
   final service = ref.watch(notificationServiceProvider);
   return NotificationNotifier(service);
 });
+
+/// Exposes the FCM device token. Null until the service is ready.
+final fcmTokenProvider = FutureProvider<String?>((ref) async {
+  final service = ref.watch(notificationServiceProvider);
+  await service.initialize();
+  return service.getFCMToken();
+});
+

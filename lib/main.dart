@@ -1,12 +1,28 @@
 import 'dart:developer' as developer;
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/router/app_router.dart';
+import 'package:travelci/firebase_options.dart';
+
+/// Called when a FCM message arrives while the app is terminated or in background.
+/// Must be a top-level function annotated with @pragma('vm:entry-point').
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // flutter_local_notifications will display the notification automatically
+  // via the FCM system tray on Android; iOS handles it natively.
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   FlutterError.onError = (details) {
     developer.log(
@@ -42,6 +58,14 @@ class SOMOApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+
+    // Wire FCM / local notification tap → deep-link via GoRouter
+    final service = ref.read(notificationServiceProvider);
+    service.onNotificationTap = (payload) {
+      if (payload == null || payload.isEmpty) return;
+      final route = payload.startsWith('/') ? payload : '/$payload';
+      router.go(route);
+    };
 
     return MaterialApp.router(
       title: 'SOMO',
