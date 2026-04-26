@@ -63,16 +63,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   /// Load conversations
   Future<void> loadConversations({String? role}) async {
-    print('[ChatProvider] Loading conversations with role: $role');
     state = state.copyWith(isLoading: true, error: null);
 
     try {
       final conversations = await _chatService.getConversations(role: role);
-      print('[ChatProvider] Loaded ${conversations.length} conversations');
-      if (conversations.isNotEmpty) {
-        print('[ChatProvider] First conversation: ${conversations.first.id}, client_id: ${conversations.first.clientId}, owner_id: ${conversations.first.ownerId}');
-      }
-      
+
       // Sort conversations by lastMessageAt descending (most recent first)
       final sortedConversations = List<Conversation>.from(conversations);
       sortedConversations.sort((a, b) {
@@ -80,20 +75,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final bTime = b.lastMessageAt ?? b.createdAt;
         return bTime.compareTo(aTime);
       });
-      
-      // Debug: Log conversation details
-      print('[ChatProvider] Final conversations count: ${sortedConversations.length}');
-      for (var conv in sortedConversations) {
-        print('[ChatProvider] Conversation ${conv.id}: client=${conv.client != null ? conv.client!.fullName : "null"}, owner=${conv.owner != null ? conv.owner!.fullName : "null"}');
-      }
-      
+
       state = state.copyWith(
         conversations: sortedConversations,
         isLoading: false,
         error: null,
       );
     } catch (e) {
-      print('[ChatProvider] Error loading conversations: $e');
       state = state.copyWith(
         isLoading: false,
         error: e.toString().replaceFirst('Exception: ', ''),
@@ -339,7 +327,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   /// Refresh conversations
   Future<void> refreshConversations({String? role}) async {
-    print('[ChatProvider] Refreshing conversations with role: $role');
     await loadConversations(role: role);
   }
 

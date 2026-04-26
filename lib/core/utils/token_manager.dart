@@ -1,33 +1,25 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Token Manager
-/// 
-/// Handles secure storage and retrieval of JWT tokens
 class TokenManager {
   static const String _tokenKey = 'auth_token';
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
-  /// Save authentication token
   static Future<void> saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
+    await _storage.write(key: _tokenKey, value: token);
   }
 
-  /// Get authentication token
   static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    return _storage.read(key: _tokenKey);
   }
 
-  /// Remove authentication token (logout)
   static Future<void> clearToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
+    await _storage.delete(key: _tokenKey);
   }
 
-  /// Check if user is authenticated
   static Future<bool> isAuthenticated() async {
     final token = await getToken();
     return token != null && token.isNotEmpty;
   }
 }
-

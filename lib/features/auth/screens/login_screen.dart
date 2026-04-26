@@ -277,25 +277,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
-                const SizedBox(height: 16),
-                // Quick login buttons for demo
-                const Divider(),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: authState.isLoading
-                      ? null
-                      : () { tapFeedback(); _emailController.text = 'john@example.com'; _passwordController.text = 'password123'; },
-                  icon: const Icon(FontAwesomeIcons.user),
-                  label: const Text('Remplir client'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: authState.isLoading
-                      ? null
-                      : () { tapFeedback(); _emailController.text = 'jane@example.com'; _passwordController.text = 'password123'; },
-                  icon: const Icon(FontAwesomeIcons.building),
-                  label: const Text('Remplir propriétaire'),
-                ),
                   ],
                 ),
               ),

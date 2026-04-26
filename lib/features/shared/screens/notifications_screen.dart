@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:go_router/go_router.dart';
 import 'package:travelci/core/models/notification.dart' as app;
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/utils/date_formatter.dart';
@@ -135,6 +136,26 @@ class _NotificationCard extends ConsumerWidget {
 
   const _NotificationCard({required this.notification});
 
+  void _navigateForNotification(BuildContext context, app.AppNotification notification) {
+    final data = notification.data;
+    switch (notification.type) {
+      case app.NotificationType.message:
+        final conversationId = data?['conversationId'] as String?;
+        if (conversationId != null) {
+          context.go('/chat/$conversationId');
+        } else {
+          context.go('/chat');
+        }
+      case app.NotificationType.bookingRequest:
+      case app.NotificationType.bookingAccepted:
+      case app.NotificationType.bookingDeclined:
+      case app.NotificationType.bookingCancelled:
+        context.go('/bookings');
+      case app.NotificationType.system:
+        break;
+    }
+  }
+
   IconData _getIcon(app.NotificationType type) {
     switch (type) {
       case app.NotificationType.bookingRequest:
@@ -197,7 +218,8 @@ class _NotificationCard extends ConsumerWidget {
             if (isUnread) {
               await ref.read(notificationProvider.notifier).markAsRead(notification.id);
             }
-            // TODO: Navigate to relevant screen based on notification type
+            if (!context.mounted) return;
+            _navigateForNotification(context, notification);
           },
           child: Padding(
             padding: const EdgeInsets.all(12.0),
