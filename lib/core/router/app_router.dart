@@ -19,6 +19,7 @@ import 'package:travelci/features/owner/screens/dashboard_screen.dart';
 import 'package:travelci/features/owner/screens/property_form_screen.dart';
 import 'package:travelci/features/owner/screens/property_availability_screen.dart';
 import 'package:travelci/core/models/property.dart';
+import 'package:travelci/features/shared/screens/notifications_screen.dart';
 
 /// Notifier used to re-run router redirect when auth changes, without recreating the router.
 /// This keeps the navigation stack (e.g. Disponibilité, edit view) from closing when /me runs.
@@ -178,6 +179,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return PropertyFormScreen(propertyId: id);
+        },
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/booking/:id',
+        builder: (context, state) {
+          return Consumer(
+            builder: (context, ref, _) {
+              final user = ref.watch(authProvider).user;
+              if (user == null) return const HomeScreen();
+              if (user.role == UserRole.owner) {
+                return const BookingRequestsScreen();
+              }
+              return const MyBookingsScreen();
+            },
+          );
         },
       ),
       GoRoute(
