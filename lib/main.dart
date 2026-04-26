@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -6,7 +8,25 @@ import 'package:travelci/core/router/app_router.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize French locale for date formatting
+  FlutterError.onError = (details) {
+    developer.log(
+      details.exceptionAsString(),
+      name: 'FlutterError',
+      error: details.exception,
+      stackTrace: details.stack,
+    );
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    developer.log(
+      error.toString(),
+      name: 'PlatformError',
+      error: error,
+      stackTrace: stack,
+    );
+    return true;
+  };
+
   await initializeDateFormatting('fr', null);
 
   runApp(

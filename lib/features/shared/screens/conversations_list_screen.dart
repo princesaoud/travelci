@@ -45,12 +45,9 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(authProvider).user;
       if (user != null) {
-        print('[ConversationsList] Loading conversations for user: ${user.id}, role: ${user.role.value}');
         ref.read(chatProvider.notifier).loadConversations(
           role: user.role.value,
         );
-      } else {
-        print('[ConversationsList] No user found, cannot load conversations');
       }
     });
   }
@@ -129,11 +126,6 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
 
     final conversations = _filterConversations(chatState.conversations);
     
-    // Debug log
-    print('[ConversationsList] Total conversations in state: ${chatState.conversations.length}');
-    print('[ConversationsList] Filtered conversations: ${conversations.length}');
-    print('[ConversationsList] Search query: "$_searchQuery"');
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Messages'),
@@ -218,9 +210,6 @@ class _ConversationsListScreenState extends ConsumerState<ConversationsListScree
                               final otherUser = _getOtherUser(conversation, user);
 
                               if (otherUser == null) {
-                                // Log for debugging
-                                print('[ConversationsList] Conversation ${conversation.id} has null otherUser. client=${conversation.client != null}, owner=${conversation.owner != null}, userRole=${user.role.value}');
-                                // Show conversation anyway with fallback display
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 12),
                                   child: ListTile(

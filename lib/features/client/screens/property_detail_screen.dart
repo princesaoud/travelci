@@ -111,12 +111,9 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
               // Increased delay to ensure conversation is created
               await Future.delayed(const Duration(milliseconds: 1500));
               try {
-                print('[PropertyDetail] Refreshing conversations for user: ${user.id}, role: ${user.role.value}');
                 await ref.read(chatProvider.notifier).refreshConversations(role: user.role.value);
-                print('[PropertyDetail] Conversations refreshed after booking creation');
-              } catch (e) {
-                // Log but don't fail the booking creation if conversation refresh fails
-                print('[PropertyDetail] Failed to refresh conversations: $e');
+              } catch (_) {
+                // Don't fail the booking creation if conversation refresh fails
               }
 
               // Show success message first
@@ -479,15 +476,11 @@ class _BookingSheetState extends ConsumerState<_BookingSheet> {
       final bookingService = ref.read(bookingServiceProvider);
       final bookings = await bookingService.getPropertyBookings(widget.property.id);
       if (mounted) setState(() => _propertyBookings = bookings);
-    } catch (e) {
-      print('[BookingSheet] Error loading property bookings: $e');
-    }
+    } catch (_) {}
     try {
       final dates = await _availabilityService.getBlockedDates(widget.property.id);
       if (mounted) setState(() => _blockedDates = Set<String>.from(dates));
-    } catch (e) {
-      print('[BookingSheet] Error loading blocked dates: $e');
-    }
+    } catch (_) {}
     if (mounted) setState(() => _loadingBookings = false);
   }
 

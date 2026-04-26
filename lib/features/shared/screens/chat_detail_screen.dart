@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart'; // For MissingPluginException
@@ -282,9 +281,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
           type: FileType.any,
           allowMultiple: false,
         );
-      } on MissingPluginException catch (e) {
-        // Handle MissingPluginException specifically
-        print('[ChatDetailScreen] FilePicker MissingPluginException: $e');
+      } on MissingPluginException catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -298,8 +295,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
         }
         return;
       } on PlatformException catch (e) {
-        // Handle platform-specific exceptions
-        print('[ChatDetailScreen] FilePicker PlatformException: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -310,8 +305,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
         }
         return;
       } on Exception catch (e) {
-        // Handle other exceptions
-        print('[ChatDetailScreen] FilePicker exception: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -322,9 +315,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
         }
         return;
       } catch (e) {
-        // Handle any other errors including LateInitializationError
-        print('[ChatDetailScreen] FilePicker error: $e');
-        print('[ChatDetailScreen] Error type: ${e.runtimeType}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -366,9 +356,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
           ),
         );
       }
-      // Log the error for debugging
-      print('[ChatDetailScreen] File picker error: $e');
-      print('[ChatDetailScreen] Error type: ${e.runtimeType}');
     }
   }
 
@@ -384,9 +371,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
     String? fileName;
     int? fileSize;
 
-    // Upload file if selected
     if (_selectedFilePath != null) {
-      print('[ChatDetailScreen] Starting file upload: ${_selectedFilePath}, name: ${_selectedFileName}');
       setState(() {
         _isUploadingFile = true;
       });
@@ -399,12 +384,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
           fileName: _selectedFileName ?? 'file',
         );
 
-        print('[ChatDetailScreen] File upload successful: $fileInfo');
         fileUrl = fileInfo['file_url'] as String?;
         fileName = fileInfo['file_name'] as String?;
         fileSize = fileInfo['file_size'] as int?;
-
-        print('[ChatDetailScreen] Extracted file info - url: $fileUrl, name: $fileName, size: $fileSize');
 
         if (fileUrl == null || fileName == null) {
           throw Exception('Les informations du fichier sont incomplètes après l\'upload');
@@ -416,7 +398,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
           _isUploadingFile = false;
         });
       } catch (e) {
-        print('[ChatDetailScreen] File upload error: $e');
         setState(() {
           _isUploadingFile = false;
           _isSending = false;
@@ -436,8 +417,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> with Widget
     final messageContent = content.isEmpty && fileUrl != null 
         ? fileName ?? 'Fichier joint' 
         : content;
-
-    print('[ChatDetailScreen] Sending message - content: "$messageContent", hasFile: ${fileUrl != null}, fileUrl: $fileUrl, fileName: $fileName, fileSize: $fileSize');
 
     _messageController.clear();
 

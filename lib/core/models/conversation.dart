@@ -41,56 +41,40 @@ class Conversation extends Equatable {
   });
 
   static String? _extractPropertyTitle(Map<String, dynamic> json) {
-    // Try property_title first (from backend)
     if (json['property_title'] != null) {
-      final title = json['property_title'] as String?;
-      print('[Conversation] Found property_title: $title');
-      return title;
+      return json['property_title'] as String?;
     }
-    
-    // Try to extract from booking.property.title if available
+
     if (json['booking'] != null) {
       final booking = json['booking'] as Map<String, dynamic>?;
       if (booking != null && booking['property'] != null) {
         final property = booking['property'];
         if (property is Map<String, dynamic> && property['title'] != null) {
-          final title = property['title'] as String;
-          print('[Conversation] Found property title from booking.property.title: $title');
-          return title;
+          return property['title'] as String;
         } else if (property is List && property.isNotEmpty) {
           final firstProperty = property[0] as Map<String, dynamic>?;
           if (firstProperty != null && firstProperty['title'] != null) {
-            final title = firstProperty['title'] as String;
-            print('[Conversation] Found property title from booking.property[0].title: $title');
-            return title;
+            return firstProperty['title'] as String;
           }
         }
       }
     }
-    
-    print('[Conversation] Property title not found in JSON. Available keys: ${json.keys.toList()}');
+
     return null;
   }
 
   static User? _tryParseUser(dynamic userData) {
     try {
       if (userData is Map<String, dynamic>) {
-        // Check if required fields exist
-        if (userData['id'] != null && 
+        if (userData['id'] != null &&
             (userData['full_name'] != null || userData['fullName'] != null) &&
             userData['email'] != null) {
           return User.fromJson(userData);
-        } else {
-          print('[Conversation] User data missing required fields: $userData');
-          return null;
         }
-      } else {
-        print('[Conversation] User data is not a Map: ${userData.runtimeType}');
         return null;
       }
+      return null;
     } catch (e) {
-      print('[Conversation] Error parsing user: $e');
-      print('[Conversation] User data: $userData');
       return null;
     }
   }
@@ -162,8 +146,6 @@ class Conversation extends Equatable {
             : null,
       );
     } catch (e) {
-      print('[Conversation] Error parsing conversation: $e');
-      print('[Conversation] JSON data: $json');
       rethrow;
     }
   }
