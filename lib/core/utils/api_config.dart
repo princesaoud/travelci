@@ -56,6 +56,14 @@ class ApiConfig {
   static String conversationUnreadCountEndpoint(String id) => '$apiPath/conversations/$id/unread-count';
   static String messageReadEndpoint(String id) => '$apiPath/messages/$id/read';
 
+  // Favorites endpoints
+  static String get favoritesEndpoint => '$apiPath/favorites';
+  static String favoriteEndpoint(String propertyId) => '$apiPath/favorites/$propertyId';
+
+  // Reviews endpoints
+  static String reviewsForPropertyEndpoint(String propertyId) => '$apiPath/reviews/property/$propertyId';
+  static String reviewEndpoint(String reviewId) => '$apiPath/reviews/$reviewId';
+
   // Request timeout
   static const Duration requestTimeout = Duration(seconds: 30);
 }

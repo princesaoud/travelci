@@ -9,6 +9,8 @@ import 'package:travelci/features/auth/screens/register_screen.dart';
 import 'package:travelci/features/client/screens/home_screen.dart';
 import 'package:travelci/features/client/screens/my_bookings_screen.dart';
 import 'package:travelci/features/client/screens/property_detail_screen.dart';
+import 'package:travelci/features/client/screens/favorites_screen.dart';
+import 'package:travelci/features/client/screens/map_screen.dart';
 import 'package:travelci/features/client/screens/search_screen.dart';
 import 'package:travelci/features/shared/screens/conversations_list_screen.dart';
 import 'package:travelci/features/shared/screens/chat_detail_screen.dart';
@@ -19,7 +21,6 @@ import 'package:travelci/features/owner/screens/dashboard_screen.dart';
 import 'package:travelci/features/owner/screens/property_form_screen.dart';
 import 'package:travelci/features/owner/screens/property_availability_screen.dart';
 import 'package:travelci/core/models/property.dart';
-import 'package:travelci/features/shared/screens/notifications_screen.dart';
 
 /// Notifier used to re-run router redirect when auth changes, without recreating the router.
 /// This keeps the navigation stack (e.g. Disponibilité, edit view) from closing when /me runs.
@@ -85,6 +86,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               if (location == '/') index = 0;
               else if (location == '/bookings') index = 1;
               else if (location == '/chat') index = 2;
+              else if (location == '/favorites') index = 3;
               return ClientNavigationWrapper(
                 initialIndex: index,
                 child: child,
@@ -135,6 +137,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
+            path: '/favorites',
+            builder: (context, state) => const FavoritesScreen(),
+          ),
+          GoRoute(
             path: '/chat/:id',
             builder: (context, state) {
               return Consumer(
@@ -154,6 +160,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       // Client routes without bottom navigation (detail screens)
+      GoRoute(
+        path: '/map',
+        builder: (context, state) => const MapScreen(),
+      ),
       GoRoute(
         path: '/search',
         builder: (context, state) => const SearchScreen(),
@@ -179,25 +189,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return PropertyFormScreen(propertyId: id);
-        },
-      ),
-      GoRoute(
-        path: '/notifications',
-        builder: (context, state) => const NotificationsScreen(),
-      ),
-      GoRoute(
-        path: '/booking/:id',
-        builder: (context, state) {
-          return Consumer(
-            builder: (context, ref, _) {
-              final user = ref.watch(authProvider).user;
-              if (user == null) return const HomeScreen();
-              if (user.role == UserRole.owner) {
-                return const BookingRequestsScreen();
-              }
-              return const MyBookingsScreen();
-            },
-          );
         },
       ),
       GoRoute(
