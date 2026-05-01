@@ -34,17 +34,17 @@ class ClientNavigationWrapper extends ConsumerWidget {
           context.push('/login');
         }
         break;
+      case 3:
+        context.go('/favorites');
+        break;
     }
   }
 
   int _getCurrentIndex(String location) {
-    if (location == '/') {
-      return 0;
-    } else if (location == '/bookings') {
-      return 1;
-    } else if (location == '/chat') {
-      return 2;
-    }
+    if (location == '/') return 0;
+    if (location == '/bookings') return 1;
+    if (location == '/chat') return 2;
+    if (location == '/favorites') return 3;
     return 0;
   }
 
@@ -77,6 +77,10 @@ class ClientNavigationWrapper extends ConsumerWidget {
             icon: const Icon(FontAwesomeIcons.comments),
             label: 'Messages',
             tooltip: isAuthenticated ? null : 'Connexion requise',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(FontAwesomeIcons.heart),
+            label: 'Favoris',
           ),
         ],
       ),

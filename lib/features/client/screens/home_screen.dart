@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
 import 'package:travelci/core/providers/property_provider.dart';
+import 'package:travelci/core/providers/favorites_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/feedback.dart';
 
@@ -129,6 +130,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               tooltip: 'Déconnexion',
             ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          tapFeedback();
+          context.push('/map');
+        },
+        icon: const Icon(FontAwesomeIcons.map),
+        label: const Text('Carte', style: TextStyle(fontWeight: FontWeight.w600)),
+        elevation: 4,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -269,13 +279,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _PropertyCard extends StatelessWidget {
+class _PropertyCard extends ConsumerWidget {
   final Property property;
 
   const _PropertyCard({required this.property});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isFav = ref
+            .watch(favoritesProvider)
+            .valueOrNull
+            ?.contains(property.id) ??
+        false;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       clipBehavior: Clip.antiAlias,
@@ -287,24 +303,62 @@ class _PropertyCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: property.imageUrls.isNotEmpty
-                  ? Image.network(
-                      property.imageUrls.first,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
+            // Image with heart overlay
+            Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: property.imageUrls.isNotEmpty
+                      ? Image.network(
+                          property.imageUrls.first,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[300],
+                              child: const Icon(FontAwesomeIcons.image,
+                                  size: 48),
+                            );
+                          },
+                        )
+                      : Container(
                           color: Colors.grey[300],
                           child: const Icon(FontAwesomeIcons.image, size: 48),
-                        );
-                      },
-                    )
-                  : Container(
-                      color: Colors.grey[300],
-                      child: const Icon(FontAwesomeIcons.image, size: 48),
+                        ),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: GestureDetector(
+                    onTap: () {
+                      tapFeedback();
+                      ref
+                          .read(favoritesProvider.notifier)
+                          .toggleFavorite(property.id);
+                    },
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        isFav
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 20,
+                        color: isFav ? Colors.red : Colors.grey[600],
+                      ),
                     ),
+                  ),
+                ),
+              ],
             ),
             Padding(
               padding: const EdgeInsets.all(12.0),

@@ -1,4 +1,4 @@
-package com.example.travelci
+package com.somo.app
 
 import io.flutter.embedding.android.FlutterActivity
 

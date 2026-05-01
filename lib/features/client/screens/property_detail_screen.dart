@@ -12,6 +12,9 @@ import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/services/availability_service.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/providers/chat_provider.dart';
+import 'package:travelci/core/models/review.dart';
+import 'package:travelci/core/providers/favorites_provider.dart';
+import 'package:travelci/core/providers/review_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/feedback.dart';
 
@@ -33,6 +36,14 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
   DateTime? _selectedEndDate;
   int _guests = 1;
   final _messageController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(reviewProvider.notifier).loadReviews(widget.propertyId);
+    });
+  }
 
   @override
   void dispose() {
@@ -157,6 +168,11 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
   Widget build(BuildContext context) {
     final property = ref.watch(propertyProvider.notifier).getPropertyById(widget.propertyId);
     final user = ref.watch(authProvider).user;
+    final isFav = ref.watch(favoritesProvider).valueOrNull?.contains(widget.propertyId) ?? false;
+    final reviews = ref.watch(reviewProvider.select((m) => m[widget.propertyId] ?? []));
+    final avgRating = reviews.isNotEmpty
+        ? reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length
+        : 0.0;
 
     if (property == null) {
       return Scaffold(
@@ -172,6 +188,19 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
           SliverAppBar(
             expandedHeight: 300,
             pinned: true,
+            actions: [
+              IconButton(
+                icon: Icon(
+                  isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  color: isFav ? Colors.red : Colors.white,
+                ),
+                onPressed: () {
+                  tapFeedback();
+                  ref.read(favoritesProvider.notifier).toggleFavorite(widget.propertyId);
+                },
+                tooltip: isFav ? 'Retirer des favoris' : 'Ajouter aux favoris',
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: PageView.builder(
                 itemCount: property.imageUrls.length,
@@ -337,6 +366,16 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
                   const SizedBox(height: 24),
                   const Divider(),
                   const SizedBox(height: 16),
+                  // Reviews section
+                  _ReviewsSection(
+                    propertyId: widget.propertyId,
+                    reviews: reviews,
+                    avgRating: avgRating,
+                    user: user,
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
                   if (user?.role == UserRole.client)
                     ElevatedButton.icon(
                       onPressed: () { tapFeedback(); _showBookingDialog(); },
@@ -383,6 +422,356 @@ class _PropertyDetailScreenState extends ConsumerState<PropertyDetailScreen> {
     );
   }
 }
+
+// ──────────────────────────────────────────────
+// Reviews
+// ──────────────────────────────────────────────
+
+class _ReviewsSection extends ConsumerWidget {
+  final String propertyId;
+  final List<Review> reviews;
+  final double avgRating;
+  final dynamic user;
+
+  const _ReviewsSection({
+    required this.propertyId,
+    required this.reviews,
+    required this.avgRating,
+    required this.user,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasReviewed = user != null &&
+        ref
+            .read(reviewProvider.notifier)
+            .hasUserReviewed(propertyId, user!.id as String);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Avis',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(width: 8),
+            if (reviews.isNotEmpty) ...[
+              const Icon(Icons.star_rounded, size: 20, color: Color(0xFFFFC107)),
+              const SizedBox(width: 3),
+              Text(
+                avgRating.toStringAsFixed(1),
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              Text(
+                ' · ${reviews.length} avis',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ],
+            const Spacer(),
+            if (user?.role?.toString().contains('client') == true && !hasReviewed)
+              TextButton.icon(
+                onPressed: () {
+                  tapFeedback();
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => _WriteReviewSheet(
+                      propertyId: propertyId,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Écrire un avis'),
+                style: TextButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (reviews.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: Text(
+                'Aucun avis pour l\'instant.\nSoyez le premier à donner votre avis !',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
+              ),
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: reviews.length,
+            separatorBuilder: (_, __) => const Divider(height: 24),
+            itemBuilder: (_, i) => _ReviewCard(review: reviews[i]),
+          ),
+      ],
+    );
+  }
+}
+
+class _ReviewCard extends StatelessWidget {
+  final Review review;
+
+  const _ReviewCard({required this.review});
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = review.userName
+        .split(' ')
+        .take(2)
+        .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+        .join();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+          child: Text(
+            initials,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    review.userName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const Spacer(),
+                  Text(
+                    _formatDate(review.createdAt),
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              _StarDisplay(rating: review.rating, size: 14),
+              const SizedBox(height: 6),
+              Text(
+                review.comment,
+                style: const TextStyle(fontSize: 14, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    const months = [
+      'jan', 'fév', 'mar', 'avr', 'mai', 'jun',
+      'jul', 'aoû', 'sep', 'oct', 'nov', 'déc'
+    ];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+}
+
+class _StarDisplay extends StatelessWidget {
+  final double rating;
+  final double size;
+
+  const _StarDisplay({required this.rating, this.size = 18});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (i) {
+        if (i < rating.floor()) {
+          return Icon(Icons.star_rounded,
+              size: size, color: const Color(0xFFFFC107));
+        } else if (i < rating && rating - i >= 0.5) {
+          return Icon(Icons.star_half_rounded,
+              size: size, color: const Color(0xFFFFC107));
+        } else {
+          return Icon(Icons.star_outline_rounded,
+              size: size, color: Colors.grey[400]);
+        }
+      }),
+    );
+  }
+}
+
+class _WriteReviewSheet extends ConsumerStatefulWidget {
+  final String propertyId;
+
+  const _WriteReviewSheet({required this.propertyId});
+
+  @override
+  ConsumerState<_WriteReviewSheet> createState() => _WriteReviewSheetState();
+}
+
+class _WriteReviewSheetState extends ConsumerState<_WriteReviewSheet> {
+  double _rating = 0;
+  final _commentController = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_rating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez sélectionner une note')),
+      );
+      return;
+    }
+    if (_commentController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez écrire un commentaire')),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    await ref.read(reviewProvider.notifier).addReview(
+          propertyId: widget.propertyId,
+          rating: _rating,
+          comment: _commentController.text.trim(),
+        );
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Avis publié avec succès'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const Text(
+              'Écrire un avis',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            const Text('Votre note',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Row(
+              children: List.generate(5, (i) {
+                final starValue = i + 1.0;
+                return GestureDetector(
+                  onTap: () {
+                    tapFeedback();
+                    setState(() => _rating = starValue);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Icon(
+                      _rating >= starValue
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      size: 40,
+                      color: _rating >= starValue
+                          ? const Color(0xFFFFC107)
+                          : Colors.grey[300],
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 20),
+            const Text('Votre commentaire',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _commentController,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText:
+                    'Partagez votre expérience avec ce logement...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Colors.grey[50],
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _submitting ? null : _submit,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _submitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(Colors.white)),
+                      )
+                    : const Text('Publier l\'avis',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────
 
 class _BookingSheet extends ConsumerStatefulWidget {
   final Property property;
