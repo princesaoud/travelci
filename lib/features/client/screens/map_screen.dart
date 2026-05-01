@@ -16,6 +16,35 @@ import 'package:travelci/core/utils/feedback.dart';
 // Default center: Abidjan
 const _defaultCenter = LatLng(5.3600, -4.0083);
 
+// Fallback coordinates for cities without GPS data
+const _cityCoordinates = <String, LatLng>{
+  'abidjan': LatLng(5.3600, -4.0083),
+  'yamoussoukro': LatLng(6.8276, -5.2893),
+  'bouaké': LatLng(7.6894, -5.0300),
+  'bouake': LatLng(7.6894, -5.0300),
+  'daloa': LatLng(6.8773, -6.4502),
+  'san-pédro': LatLng(4.7485, -6.6363),
+  'san pedro': LatLng(4.7485, -6.6363),
+  'sanpedro': LatLng(4.7485, -6.6363),
+  'korhogo': LatLng(9.4580, -5.6296),
+  'man': LatLng(7.4127, -7.5538),
+  'gagnoa': LatLng(6.1319, -5.9503),
+  'abengourou': LatLng(6.7297, -3.4961),
+  'divo': LatLng(5.8364, -5.3594),
+  'odienné': LatLng(9.5089, -7.5656),
+  'odienne': LatLng(9.5089, -7.5656),
+  'bondoukou': LatLng(8.0404, -2.8004),
+  'séguéla': LatLng(7.9617, -6.6735),
+  'seguela': LatLng(7.9617, -6.6735),
+};
+
+LatLng? _coordinatesForProperty(Property p) {
+  if (p.latitude != null && p.longitude != null) {
+    return LatLng(p.latitude!, p.longitude!);
+  }
+  return _cityCoordinates[p.city.trim().toLowerCase()];
+}
+
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
@@ -83,10 +112,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
   void _onMarkerTap(Property property) {
     tapFeedback();
     setState(() => _selectedProperty = property);
-    _mapController.move(
-      LatLng(property.latitude!, property.longitude!),
-      14.5,
-    );
+    final coords = _coordinatesForProperty(property);
+    if (coords != null) _mapController.move(coords, 14.5);
   }
 
   void _centerOnUser() {
@@ -102,8 +129,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
   @override
   Widget build(BuildContext context) {
     final propertyState = ref.watch(propertyProvider);
-    final properties = propertyState.properties
-        .where((p) => p.latitude != null && p.longitude != null)
+    final propertiesWithCoords = propertyState.properties
+        .map((p) => (property: p, coords: _coordinatesForProperty(p)))
+        .where((e) => e.coords != null)
         .toList();
 
     final colorScheme = Theme.of(context).colorScheme;
@@ -149,7 +177,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                '${properties.length} logement${properties.length > 1 ? 's' : ''}',
+                '${propertiesWithCoords.length} logement${propertiesWithCoords.length > 1 ? 's' : ''}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 13,
@@ -227,10 +255,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ),
               // Property markers
               MarkerLayer(
-                markers: properties.map((property) {
+                markers: propertiesWithCoords.map((entry) {
+                  final property = entry.property;
                   final isSelected = _selectedProperty?.id == property.id;
                   return Marker(
-                    point: LatLng(property.latitude!, property.longitude!),
+                    point: entry.coords!,
                     width: 100,
                     height: 44,
                     child: GestureDetector(

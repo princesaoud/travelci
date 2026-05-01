@@ -25,6 +25,8 @@ Application Flutter pour la réservation de logements en Côte d'Ivoire (MVP).
 - **Riverpod** 2.5.1 - Gestion d'état réactive
 - **GoRouter** 14.2.0 - Navigation déclarative
 - **Dio** 5.4.0 - Client HTTP pour les appels API
+- **Firebase Core** 3.6.0 - Initialisation Firebase
+- **Firebase Messaging** 15.1.3 - Notifications push (FCM)
 - **Shared Preferences** 2.2.2 - Stockage local (tokens)
 - **Image Picker** 1.0.7 - Sélection d'images
 - **Table Calendar** 3.0.9 - Sélection de dates
@@ -259,13 +261,14 @@ L'application est entièrement intégrée avec le backend TravelCI via une API R
 - États de chargement
 - Gestion des erreurs avec messages en français
 
-## 🔔 Système de Notifications Locales
+## 🔔 Système de Notifications
 
-L'application utilise un système de **notifications locales** qui fonctionne sans Firebase :
+L'application combine **notifications locales** et **notifications push Firebase Cloud Messaging (FCM)** :
 
 ### Fonctionnalités
 - ✅ Notifications in-app (quand l'application est ouverte)
 - ✅ Notifications système (quand l'application est en arrière-plan)
+- ✅ Notifications push FCM (quand l'application est complètement fermée)
 - ✅ Badge avec compteur de notifications non lues
 - ✅ Stockage local des notifications (persistance)
 - ✅ Types de notifications :
@@ -277,21 +280,18 @@ L'application utilise un système de **notifications locales** qui fonctionne sa
 ### Comment ça fonctionne
 1. **Quand l'app est ouverte** : Les notifications sont créées automatiquement lors des événements (création de réservation, acceptation, etc.)
 2. **Quand l'app est en arrière-plan** : Les notifications système s'affichent
-3. **Stockage** : Toutes les notifications sont sauvegardées localement et persistent entre les sessions
-4. **Accès** : Cliquez sur l'icône de cloche dans le dashboard pour voir toutes les notifications
+3. **Quand l'app est fermée** : Firebase Cloud Messaging (FCM) délivre les notifications push
+4. **Stockage** : Toutes les notifications sont sauvegardées localement et persistent entre les sessions
+5. **Accès** : Cliquez sur l'icône de cloche dans le dashboard pour voir toutes les notifications
 
-### Limitations
-- ⚠️ Les notifications ne fonctionnent **pas** quand l'application est complètement fermée
-- ⚠️ Pas de notifications push depuis le backend (nécessiterait Firebase Cloud Messaging)
-
-### Pour ajouter Firebase (optionnel)
-Si vous souhaitez des notifications push même quand l'app est fermée, vous pouvez ajouter Firebase Cloud Messaging plus tard.
+### Configuration Firebase
+Le fichier `google-services.json` (Android) et `GoogleService-Info.plist` (iOS) doivent être présents dans les dossiers respectifs pour que FCM fonctionne.
 
 ## 🔜 Prochaines étapes
 
 - [x] Notifications locales (implémenté)
 - [x] Chat en temps réel (implémenté)
-- [ ] Notifications push (Firebase Cloud Messaging - optionnel)
+- [x] Notifications push Firebase Cloud Messaging (implémenté)
 - [ ] Paiements (CinetPay, Orange Money)
 - [ ] Géolocalisation et cartes
 - [ ] Système de favoris
