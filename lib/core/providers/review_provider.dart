@@ -33,7 +33,7 @@ class ReviewNotifier extends Notifier<Map<String, List<Review>>> {
       rating: rating,
       comment: comment,
     );
-    final updated = [review, ...state[propertyId] ?? []];
+    final List<Review> updated = [review, ...state[propertyId] ?? []];
     state = {...state, propertyId: updated};
   }
 
