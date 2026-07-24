@@ -4,7 +4,32 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(gh pr *)"
+      "Bash(gh pr *)",
+      "Bash(flutter pub *)",
+      "Bash(/Users/princesaoud/flutter/bin/flutter pub *)",
+      "Bash(find /Users/princesaoud/flutter_projects/travelci/lib -type f -name \"*.dart\" -exec grep -l \"latitude\\\\|longitude\\\\|LatLng\" {} \\\\;)",
+      "Bash(/Users/princesaoud/flutter/bin/flutter analyze *)",
+      "Bash(rm -rf ~/.gradle/caches/transforms-3 ~/.gradle/caches/transforms-4)",
+      "Bash(rm -rf ~/.gradle/daemon)",
+      "Bash(rm -rf ~/.gradle/caches/build-cache-*)",
+      "Bash(git status *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://travelci-backend.vercel.app/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://travelci-backend.vercel.app/api/auth/me)",
+      "Bash(curl -s -i -X OPTIONS https://travelci-backend.vercel.app/api/auth/me)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X PUT https://travelci-backend.vercel.app/api/auth/me)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X PATCH https://travelci-backend.vercel.app/api/auth/me)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X DELETE https://travelci-backend.vercel.app/api/auth/me)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X POST https://travelci-backend.vercel.app/api/auth/fcm-token)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X POST https://travelci-backend.vercel.app/api/notifications/register-token)",
+      "Bash(curl -s -X DELETE https://travelci-backend.vercel.app/api/properties/test-id)",
+      "Bash(curl -s -X DELETE https://travelci-backend.vercel.app/api/properties)",
+      "Bash(find /Users/princesaoud -maxdepth 4 -type d \\\\\\( -iname \"*travelci-backend*\" -o -iname \"*travelci_backend*\" \\\\\\) 2>/dev/null | grep -v node_modules *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"tsc exited $?\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Read(//tmp/**)",
+      "Bash(flutter analyze *)",
+      "Bash(git commit *)"
     ]
   }
 }
