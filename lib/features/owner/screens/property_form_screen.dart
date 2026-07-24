@@ -4,6 +4,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:dio/dio.dart';
 import 'dart:io';
 import 'package:travelci/core/models/property.dart';
 import 'package:travelci/core/providers/auth_provider.dart';
@@ -37,6 +39,10 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
   final List<File> _selectedImages = [];
   final List<String> _removedImageUrls = []; // Track removed existing images
   final ImagePicker _imagePicker = ImagePicker();
+  // GPS coordinates for the property (captured from current position or kept from an existing listing).
+  double? _latitude;
+  double? _longitude;
+  bool _locatingLocation = false;
   final List<String> _availableAmenities = [
     'WiFi',
     'Climatisation',
@@ -80,6 +86,8 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
         _selectedType = property.type;
         _furnished = property.furnished;
         _roomCount = property.roomCount ?? 1;
+        _latitude = property.latitude;
+        _longitude = property.longitude;
         _amenities.clear();
         _amenities.addAll(property.amenities);
         // Reset removed images list when loading property
@@ -102,6 +110,85 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  void _showLocationMessage(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? Colors.red : Colors.green,
+      ),
+    );
+  }
+
+  /// Capture the device's current GPS position and best-effort fill address/city.
+  Future<void> _useCurrentLocation() async {
+    if (_locatingLocation) return;
+    setState(() => _locatingLocation = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showLocationMessage('Activez la localisation de l\'appareil pour utiliser cette fonction.', error: true);
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        _showLocationMessage('Accès à la position refusé. Vous pouvez saisir l\'adresse manuellement.', error: true);
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (!mounted) return;
+      setState(() {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+      });
+
+      // Best-effort: turn coordinates into a street/city to prefill the fields.
+      await _reverseGeocode(position.latitude, position.longitude);
+      _showLocationMessage('Position actuelle enregistrée');
+    } catch (e) {
+      _showLocationMessage('Impossible d\'obtenir la position. Réessayez ou saisissez l\'adresse manuellement.', error: true);
+    } finally {
+      if (mounted) setState(() => _locatingLocation = false);
+    }
+  }
+
+  /// Reverse-geocode coordinates via OpenStreetMap (Nominatim) to prefill the
+  /// address and city fields. Failures are ignored — the coordinates are what matter.
+  Future<void> _reverseGeocode(double lat, double lng) async {
+    try {
+      final response = await Dio().get(
+        'https://nominatim.openstreetmap.org/reverse',
+        queryParameters: {
+          'format': 'jsonv2',
+          'lat': lat,
+          'lon': lng,
+          'accept-language': 'fr',
+        },
+        options: Options(headers: {'User-Agent': 'SOMO-travelci/1.0'}),
+      );
+      final data = response.data;
+      if (data is Map && data['address'] is Map) {
+        final addr = (data['address'] as Map).cast<String, dynamic>();
+        final city = addr['city'] ?? addr['town'] ?? addr['village'] ?? addr['municipality'] ?? addr['county'];
+        final road = addr['road'] ?? addr['neighbourhood'] ?? addr['suburb'] ?? addr['quarter'];
+        if (!mounted) return;
+        setState(() {
+          if (city != null) _cityController.text = city.toString();
+          if (road != null) _addressController.text = road.toString();
+        });
+      }
+    } catch (_) {
+      // Best-effort only: the GPS coordinates are already saved.
     }
   }
 
@@ -173,6 +260,8 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
               pricePerNight: double.parse(_priceController.text),
               address: _addressController.text.trim(),
               city: _cityController.text.trim(),
+              latitude: _latitude,
+              longitude: _longitude,
               roomCount: _roomCount,
               amenities: _amenities,
             );
@@ -198,6 +287,8 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
               pricePerNight: double.parse(_priceController.text),
               address: _addressController.text.trim(),
               city: _cityController.text.trim(),
+              latitude: _latitude,
+              longitude: _longitude,
               roomCount: _roomCount,
               amenities: _amenities,
               images: _selectedImages.isEmpty ? null : _selectedImages,
@@ -488,6 +579,55 @@ class _PropertyFormScreenState extends ConsumerState<PropertyFormScreen> {
                 }
               },
             ),
+            const SizedBox(height: 24),
+            const Text(
+              'Localisation',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Utilisez votre position GPS actuelle, ou saisissez l\'adresse manuellement ci-dessous.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: (_isLoading || _locatingLocation) ? null : () { tapFeedback(); _useCurrentLocation(); },
+              icon: _locatingLocation
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(FontAwesomeIcons.locationCrosshairs, size: 16),
+              label: Text(_locatingLocation ? 'Localisation en cours…' : 'Utiliser ma position actuelle'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
+            if (_latitude != null && _longitude != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(FontAwesomeIcons.locationDot, size: 14, color: Colors.green[700]),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Position: ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _isLoading ? null : () {
+                      tapFeedback();
+                      setState(() { _latitude = null; _longitude = null; });
+                    },
+                    icon: const Icon(FontAwesomeIcons.xmark, size: 14),
+                    label: const Text('Effacer'),
+                    style: TextButton.styleFrom(foregroundColor: Colors.grey[700]),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             TextFormField(
               controller: _addressController,
