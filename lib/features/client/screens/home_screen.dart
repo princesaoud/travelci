@@ -26,6 +26,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String? _locationError;
   bool _locationChecked = false;
 
+  /// How many properties are currently revealed. Grows by [_pageSize] each time
+  /// the user taps "Charger plus", until every listing is shown.
+  static const int _pageSize = 50;
+  int _visibleCount = _pageSize;
+
   Future<void> _fetchLocationThenLoadProperties() async {
     if (!mounted) return;
     ref.read(propertyProvider.notifier).loadProperties();
@@ -95,11 +100,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Watch property state to get reactive updates
     final propertyState = ref.watch(propertyProvider);
     
-    final filteredProperties = ref.read(propertyProvider.notifier).searchProperties(
+    final notifier = ref.read(propertyProvider.notifier);
+    var filteredProperties = notifier.searchProperties(
           city: _searchCity,
           type: _selectedType,
           furnished: _furnished,
         );
+
+    // Sort from nearest to farthest when the user's location is known.
+    if (_userLocation != null) {
+      filteredProperties = notifier.sortPropertiesByDistance(
+        filteredProperties,
+        _userLocation!.latitude,
+        _userLocation!.longitude,
+      );
+    }
+
+    // Progressive reveal: show at most [_visibleCount], with a "Charger plus" button.
+    final totalCount = filteredProperties.length;
+    final visibleProperties = filteredProperties.take(_visibleCount).toList();
+    final hasMore = totalCount > visibleProperties.length;
+    final remaining = totalCount - visibleProperties.length;
 
     final user = ref.watch(authProvider).user;
     final isGuest = user == null;
@@ -165,6 +186,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
+          if (mounted) setState(() => _visibleCount = _pageSize);
           await ref.read(propertyProvider.notifier).loadProperties(forceRefresh: true);
           _fetchLocationThenLoadProperties();
         },
@@ -195,6 +217,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onChanged: (value) {
                       setState(() {
                         _searchCity = value.isEmpty ? 'Abidjan' : value;
+                        _visibleCount = _pageSize; // restart pagination on new search
                       });
                     },
                   ),
@@ -210,6 +233,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             tapFeedback();
                             setState(() {
                               _selectedType = selected ? PropertyType.apartment : null;
+                              _visibleCount = _pageSize;
                             });
                           },
                         ),
@@ -223,6 +247,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             tapFeedback();
                             setState(() {
                               _selectedType = selected ? PropertyType.villa : null;
+                              _visibleCount = _pageSize;
                             });
                           },
                         ),
@@ -235,6 +260,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           tapFeedback();
                           setState(() {
                             _furnished = selected ? true : null;
+                            _visibleCount = _pageSize;
                           });
                         },
                       ),
@@ -288,9 +314,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: filteredProperties.length,
+                          itemCount: visibleProperties.length + (hasMore ? 1 : 0),
                           itemBuilder: (context, index) {
-                            final property = filteredProperties[index];
+                            if (index >= visibleProperties.length) {
+                              // "Load more" footer
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 24, top: 4),
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    tapFeedback();
+                                    setState(() {
+                                      _visibleCount += _pageSize;
+                                    });
+                                  },
+                                  icon: const Icon(FontAwesomeIcons.chevronDown, size: 16),
+                                  label: Text(
+                                    'Charger plus ($remaining restant${remaining > 1 ? 's' : ''})',
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(double.infinity, 48),
+                                  ),
+                                ),
+                              );
+                            }
+                            final property = visibleProperties[index];
                             return _PropertyCard(property: property);
                           },
                         ),

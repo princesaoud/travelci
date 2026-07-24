@@ -75,23 +75,41 @@ class PropertyNotifier extends StateNotifier<PropertyState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _propertyService.getProperties(
+      // Fetch the full catalogue (all pages) so the client can sort every
+      // listing by proximity and reveal them progressively ("Charger plus").
+      const int pageSize = 100; // backend max page size
+      final firstPage = await _propertyService.getProperties(
         city: city,
         type: type,
         furnished: furnished,
         priceMin: priceMin,
         priceMax: priceMax,
-        page: page,
-        limit: 50, // Load more properties for better UX
+        page: 1,
+        limit: pageSize,
       );
 
+      final allProperties = <Property>[...firstPage.properties];
+      final totalPages = firstPage.pagination?.pages ?? 1;
+      for (var p = 2; p <= totalPages; p++) {
+        final next = await _propertyService.getProperties(
+          city: city,
+          type: type,
+          furnished: furnished,
+          priceMin: priceMin,
+          priceMax: priceMax,
+          page: p,
+          limit: pageSize,
+        );
+        allProperties.addAll(next.properties);
+      }
+
       final newCache = {
-        for (var prop in response.properties) prop.id: prop,
+        for (var prop in allProperties) prop.id: prop,
       };
       state = state.copyWithMergedCache(newCache).copyWith(
-        properties: response.properties,
+        properties: allProperties,
         isLoading: false,
-        pagination: response.pagination,
+        pagination: firstPage.pagination,
         error: null,
         lastLoadedAt: DateTime.now(),
       );
