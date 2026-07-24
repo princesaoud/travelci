@@ -142,6 +142,43 @@ class AuthService extends ApiService {
     throw Exception(apiResponse.error?.message ?? 'Impossible de récupérer le profil utilisateur');
   }
 
+  /// Update the current user's profile (full name, phone and/or avatar photo).
+  /// Sends multipart/form-data so an optional [avatar] image can be uploaded.
+  Future<User> updateProfile({
+    String? fullName,
+    String? phone,
+    File? avatar,
+  }) async {
+    final formData = FormData.fromMap({
+      if (fullName != null) 'full_name': fullName,
+      if (phone != null) 'phone': phone,
+    });
+    if (avatar != null) {
+      formData.files.add(MapEntry(
+        'avatar',
+        await MultipartFile.fromFile(avatar.path, filename: 'avatar.jpg'),
+      ));
+    }
+
+    final response = await dio.patch<Map<String, dynamic>>(
+      ApiConfig.meEndpoint,
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+
+    final apiResponse = ApiResponse<Map<String, dynamic>>.fromJson(
+      response.data as Map<String, dynamic>,
+      (data) => data as Map<String, dynamic>,
+    );
+
+    if (apiResponse.data != null) {
+      final userData = apiResponse.data!['user'] as Map<String, dynamic>;
+      return User.fromJson(userData);
+    }
+
+    throw Exception(apiResponse.error?.message ?? 'Impossible de mettre à jour le profil');
+  }
+
   /// Logout user
   Future<void> logout() async {
     try {

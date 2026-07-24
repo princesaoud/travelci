@@ -31,6 +31,9 @@ class ApiConfig {
   static String get meEndpoint => '$apiPath/auth/me';
   static String get logoutEndpoint => '$apiPath/auth/logout';
 
+  // Device (FCM push token) endpoints
+  static String get deviceTokenEndpoint => '$apiPath/devices/token';
+
   // Property endpoints - use relative paths
   static String get propertiesEndpoint => '$apiPath/properties';
   static String propertyEndpoint(String id) => '$apiPath/properties/$id';

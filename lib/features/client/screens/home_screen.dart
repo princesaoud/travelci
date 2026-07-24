@@ -9,6 +9,7 @@ import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/providers/favorites_provider.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/feedback.dart';
+import 'package:travelci/features/shared/screens/profile_edit_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -120,14 +121,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             )
           else
-            IconButton(
+            PopupMenuButton<String>(
               icon: const Icon(FontAwesomeIcons.user),
-              onPressed: () {
+              tooltip: 'Compte',
+              onSelected: (value) {
                 tapFeedback();
-                ref.read(authProvider.notifier).logout();
-                context.go('/');
+                if (value == 'profile') {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileEditScreen()));
+                } else if (value == 'logout') {
+                  ref.read(authProvider.notifier).logout();
+                  context.go('/');
+                }
               },
-              tooltip: 'Déconnexion',
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'profile',
+                  child: ListTile(
+                    leading: Icon(FontAwesomeIcons.penToSquare),
+                    title: Text('Modifier le profil'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'logout',
+                  child: ListTile(
+                    leading: Icon(FontAwesomeIcons.rightFromBracket),
+                    title: Text('Déconnexion'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
             ),
         ],
       ),

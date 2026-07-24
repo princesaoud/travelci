@@ -35,6 +35,7 @@ class User extends Equatable {
   final String? phone;
   final UserRole role;
   final bool isVerified;
+  final String? avatarUrl;
   final String? nationalIdFrontUrl;
   final String? nationalIdBackUrl;
   final DateTime createdAt;
@@ -47,11 +48,24 @@ class User extends Equatable {
     this.phone,
     required this.role,
     this.isVerified = false,
+    this.avatarUrl,
     this.nationalIdFrontUrl,
     this.nationalIdBackUrl,
     required this.createdAt,
     this.updatedAt,
   });
+
+  /// First word of the full name (best-effort "prénom").
+  String get firstName {
+    final parts = fullName.trim().split(RegExp(r'\s+'));
+    return parts.isNotEmpty ? parts.first : '';
+  }
+
+  /// Everything after the first word of the full name (best-effort "nom").
+  String get lastName {
+    final parts = fullName.trim().split(RegExp(r'\s+'));
+    return parts.length > 1 ? parts.sublist(1).join(' ') : '';
+  }
 
   factory User.fromJson(Map<String, dynamic> json) {
     // Handle created_at - might be missing in relation queries (e.g., conversations)
@@ -74,6 +88,7 @@ class User extends Equatable {
           ? UserRoleExtension.fromString(json['role'] as String)
           : UserRole.client,
       isVerified: json['is_verified'] as bool? ?? json['isVerified'] as bool? ?? false,
+      avatarUrl: json['avatar_url'] as String? ?? json['avatarUrl'] as String?,
       nationalIdFrontUrl: json['national_id_front_url'] as String? ?? json['nationalIdFrontUrl'] as String?,
       nationalIdBackUrl: json['national_id_back_url'] as String? ?? json['nationalIdBackUrl'] as String?,
       createdAt: createdAt,
@@ -91,12 +106,13 @@ class User extends Equatable {
       'phone': phone,
       'role': role.value,
       'is_verified': isVerified,
+      if (avatarUrl != null) 'avatar_url': avatarUrl,
       'created_at': createdAt.toIso8601String(),
       if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
     };
   }
 
   @override
-  List<Object?> get props => [id, fullName, email, phone, role, isVerified, nationalIdFrontUrl, nationalIdBackUrl, createdAt, updatedAt];
+  List<Object?> get props => [id, fullName, email, phone, role, isVerified, avatarUrl, nationalIdFrontUrl, nationalIdBackUrl, createdAt, updatedAt];
 }
 

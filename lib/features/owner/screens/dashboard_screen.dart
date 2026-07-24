@@ -11,6 +11,7 @@ import 'package:travelci/core/providers/property_provider.dart';
 import 'package:travelci/core/providers/notification_provider.dart';
 import 'package:travelci/core/widgets/notification_badge.dart';
 import 'package:travelci/features/shared/screens/notifications_screen.dart';
+import 'package:travelci/features/shared/screens/profile_edit_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travelci/core/utils/currency_formatter.dart';
 import 'package:travelci/core/utils/feedback.dart';
@@ -82,10 +83,36 @@ class _OwnerDashboardScreenState extends ConsumerState<OwnerDashboardScreen> {
             onPressed: () { tapFeedback(); Navigator.push(context, MaterialPageRoute(builder: (context) => const BookingRequestsScreen())); },
             tooltip: 'Demandes de réservation',
           ),
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(FontAwesomeIcons.user),
-            onPressed: () { tapFeedback(); ref.read(authProvider.notifier).logout(); context.go('/login'); },
-            tooltip: 'Déconnexion',
+            tooltip: 'Compte',
+            onSelected: (value) {
+              tapFeedback();
+              if (value == 'profile') {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileEditScreen()));
+              } else if (value == 'logout') {
+                ref.read(authProvider.notifier).logout();
+                context.go('/login');
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'profile',
+                child: ListTile(
+                  leading: Icon(FontAwesomeIcons.penToSquare),
+                  title: Text('Modifier le profil'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'logout',
+                child: ListTile(
+                  leading: Icon(FontAwesomeIcons.rightFromBracket),
+                  title: Text('Déconnexion'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -228,31 +255,43 @@ class _ProfileCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                  child: Icon(FontAwesomeIcons.user, color: Theme.of(context).colorScheme.onPrimaryContainer, size: 28),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.fullName,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        user.email,
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                      ),
-                    ],
+            InkWell(
+              onTap: () {
+                tapFeedback();
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileEditScreen()));
+              },
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    backgroundImage: (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
+                        ? CachedNetworkImageProvider(user.avatarUrl!)
+                        : null,
+                    child: (user.avatarUrl == null || user.avatarUrl!.isEmpty)
+                        ? Icon(FontAwesomeIcons.user, color: Theme.of(context).colorScheme.onPrimaryContainer, size: 28)
+                        : null,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.fullName,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          user.email,
+                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(FontAwesomeIcons.chevronRight, size: 14, color: Colors.grey),
+                ],
+              ),
             ),
             if (hasFront || hasBack) ...[
               const SizedBox(height: 16),
