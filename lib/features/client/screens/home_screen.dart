@@ -19,7 +19,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  String _searchCity = 'Abidjan';
+  String _searchCity = ''; // empty = show every city (sorted by proximity)
   PropertyType? _selectedType;
   bool? _furnished;
   Position? _userLocation;
@@ -216,7 +216,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     onChanged: (value) {
                       setState(() {
-                        _searchCity = value.isEmpty ? 'Abidjan' : value;
+                        _searchCity = value; // empty = all cities
                         _visibleCount = _pageSize; // restart pagination on new search
                       });
                     },
